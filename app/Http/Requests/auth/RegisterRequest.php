@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Http\Requests\auth;
+
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
+use Override;
+
+class RegisterRequest extends FormRequest
+{
+    /**
+     * Determine if the user is authorized to make this request.
+     */
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        return [
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'telephone' => ['required', 'string', 'max:255', 'regex:/^\+?[0-9]{8,15}$/u'],
+            'email' => ['required', 'string', 'email:255', 'max:255'],
+            'role' => ['required', 'in:professionel,client'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+
+            'professionel' => ['nullable', 'array'],
+            'professionel.*.business_name' => ['required', 'string', 'max:255'],
+            'professionel.*.bio' => ['nullable', 'string', 'max:255'],
+            'professionel.*.experience_years' => ['integer', 'min:0'],
+            'professionel.*.mobile_service' => ['boolean'],
+            'professionel.*.travel_radius_km' => ['integer', 'min:0'],
+            'professionel.*.country' => ['required', 'string', 'max:255'],
+            'professionel.*.city' => ['required', 'string', 'max:255'],
+            'professionel.*.address' => ['nullable', 'string', 'max:255'],
+            'professionel.*.document_type' => ['nullable', 'in:passport,identity_card'],
+            'professionel.*.document' => ['nullable', 'file', 'mimes:png,jpg,pdf,jpeg', 'max:5000'],
+
+            'client' => ['nullable', 'array'],
+            'client.*.country' => ['required', 'string', 'max:255'],
+            'client.*.city' => ['required', 'string', 'max:255'],
+            'client.*.address' => ['nullable', 'string', 'max:255'],
+            'client.*.latitude' => ['nullable', 'numeric'],
+            'client.*.longitude' => ['nullable', 'numeric'],
+        ];
+    }
+
+    #[Override]
+    public function messages()
+    {
+        return [
+            'first_name.required' => "Le prenom est obligatoire",
+            'first_name.string' => "Le prenom doit être une chaine de caractères",
+            'first_name.max' => "Le prenom ne peut pas dépasser :max caractères",
+            'last_name.required' => "Le nom est obligatoire",
+            'last_name.string' => "Le nom doit être une chaine de caractères",
+            'last_name.max' => "Le nom ne peut pas dépasser :max caractères",
+            'telephone.required' => "Le telephone est obligatoire",
+            'telephone.string' => "Le telephone doit être une chaine de caractères",
+            'telephone.max' => "Le telephone ne peut pas dépasser :max caractères",
+            'email.required' => "L'e-mail est obligatoire",
+            'email.string' => "L'e-mail doit être une chaine de caractères",
+            'email.max' => "L'e-mail ne peut pas dépasser :max caractères",
+            'email.email' => "L'e-mail n'est pas valide",
+            'password.required' => "Le mot de passe est obligatoire",
+            'password.confirmed' => "Le mot de passe et la confirmation ne correspondent pas",
+        ];
+    }
+}
