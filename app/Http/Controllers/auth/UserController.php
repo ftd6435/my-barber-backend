@@ -27,7 +27,7 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $query = User::query()
-            ->with(['professionel', 'client'])
+            ->with(['professionel', 'client', 'defaultCurrency'])
             ->whereIn('role', ['professionel', 'client']);
 
         if ($request->filled('role') && in_array($request->string('role')->toString(), ['professionel', 'client'], true)) {
@@ -63,7 +63,7 @@ class UserController extends Controller
     public function getAdmins(Request $request)
     {
         $query = User::query()
-            ->with(['professionel', 'client'])
+            ->with(['professionel', 'client', 'defaultCurrency'])
             ->whereIn('role', ['super_admin', 'admin', 'user']);
 
         if ($request->filled('role') && in_array($request->string('role')->toString(), ['super_admin', 'admin', 'user'], true)) {
@@ -115,7 +115,7 @@ class UserController extends Controller
 
         $user->avatar = $user->uploadImage($request->file('avatar'), 'profile-photos');
         $user->save();
-        $user->loadMissing(['professionel', 'client']);
+        $user->loadMissing(['professionel', 'client', 'defaultCurrency']);
 
         return $this->successResponse(
             new UserResource($user),
@@ -130,7 +130,7 @@ class UserController extends Controller
             return $authorization;
         }
 
-        $user = User::with(['professionel', 'client'])->where('uuid', $uuid)->first();
+        $user = User::with(['professionel', 'client', 'defaultCurrency'])->where('uuid', $uuid)->first();
 
         if (!$user) {
             return $this->errorResponse(
@@ -164,7 +164,7 @@ class UserController extends Controller
             return $authorization;
         }
 
-        $user = User::with(['professionel', 'client'])->where('uuid', $uuid)->first();
+        $user = User::with(['professionel', 'client', 'defaultCurrency'])->where('uuid', $uuid)->first();
 
         if (!$user) {
             return $this->errorResponse(
@@ -213,7 +213,7 @@ class UserController extends Controller
 
     public function show(string $uuid)
     {
-        $user = User::with(['professionel', 'client'])->where('uuid', $uuid)->first();
+        $user = User::with(['professionel', 'client', 'defaultCurrency'])->where('uuid', $uuid)->first();
 
         if (!$user) {
             return $this->errorResponse(
@@ -232,7 +232,7 @@ class UserController extends Controller
     /** me to display authenticated user information */
     public function me(Request $request)
     {
-        $user = $request->user()->loadMissing(['professionel', 'client']);
+        $user = $request->user()->loadMissing(['professionel', 'client', 'defaultCurrency']);
 
         return $this->successResponse(
             new UserResource($user),
@@ -265,7 +265,7 @@ class UserController extends Controller
         }
 
         $user->update($data);
-        $user->loadMissing(['professionel', 'client']);
+        $user->loadMissing(['professionel', 'client', 'defaultCurrency']);
 
         return $this->successResponse(
             new UserResource($user),

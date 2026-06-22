@@ -20,6 +20,7 @@ class BookingPriceResource extends JsonResource
             'id' => $this->id,
             'booking_id' => $this->booking_id,
             'age_range_id' => $this->age_range_id,
+            'currency_id' => $this->currency_id,
             'number' => (int) $this->number,
             'price' => (float) $this->price,
             'line_total' => round($lineTotal, 2),
@@ -29,6 +30,13 @@ class BookingPriceResource extends JsonResource
                     'name' => $this->ageRange?->name,
                     'min_age' => $this->ageRange?->min_age,
                     'max_age' => $this->ageRange?->max_age,
+                ];
+            }),
+            'currency' => $this->whenLoaded('currency', function () {
+                return [
+                    'id' => $this->currency?->id,
+                    'code' => $this->currency?->code,
+                    'symbol' => $this->currency?->symbol,
                 ];
             }),
             'created_at' => $this->created_at?->toDateTimeString(),

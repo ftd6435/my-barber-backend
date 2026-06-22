@@ -3,12 +3,14 @@
 namespace App\Models\Djomy;
 
 use App\Models\Activities\Booking;
+use App\Models\Currency;
 use Illuminate\Database\Eloquent\Model;
 
 class DjomyPaymentLink extends Model
 {
     protected $fillable = [
         'booking_id',
+        'currency_id',
         'djomy_reference',
         'merchant_reference',
         'link_name',
@@ -19,6 +21,8 @@ class DjomyPaymentLink extends Model
         'usage_type',
         'usage_limit',
         'status',
+        'is_wallet_applied',
+        'wallet_applied_at',
         'expires_at',
         'description',
         'allowed_payment_methods',
@@ -33,6 +37,8 @@ class DjomyPaymentLink extends Model
         'amount_to_pay'           => 'decimal:2',
         'paid_amount'             => 'decimal:2',
         'expires_at'              => 'datetime',
+        'is_wallet_applied'       => 'boolean',
+        'wallet_applied_at'       => 'datetime',
     ];
 
     public function isActive(): bool
@@ -43,5 +49,10 @@ class DjomyPaymentLink extends Model
     public function booking()
     {
         return $this->belongsTo(Booking::class, 'booking_id');
+    }
+
+    public function currency()
+    {
+        return $this->belongsTo(Currency::class);
     }
 }

@@ -28,6 +28,7 @@ class SignupRequest extends FormRequest
             'last_name' => ['required', 'string', 'max:255'],
             'telephone' => ['required', 'string', 'max:255', 'regex:/^\+?[0-9]{8,15}$/u'],
             'email' => ['required', 'string', 'email:255', 'max:255'],
+            'default_currency_id' => ['required', 'integer', 'exists:currencies,id'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ];
     }
@@ -49,6 +50,8 @@ class SignupRequest extends FormRequest
             'email.string' => "L'e-mail doit être une chaine de caractères",
             'email.max' => "L'e-mail ne peut pas dépasser :max caractères",
             'email.email' => "L'e-mail n'est pas valide",
+            'default_currency_id.required' => "La devise par défaut est obligatoire",
+            'default_currency_id.exists' => "La devise par défaut sélectionnée est invalide",
             'password.required' => "Le mot de passe est obligatoire",
             'password.confirmed' => "Le mot de passe et la confirmation ne correspondent pas",
         ];

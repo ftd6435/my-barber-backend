@@ -37,7 +37,9 @@ class ServiceController extends Controller
                 'professionel',
                 'salon',
                 'category',
+                'currency',
                 'servicePrices' => fn ($priceQuery) => $this->scopeServicePricesForViewer($priceQuery, $isAdmin || $isOwnerView),
+                'servicePrices.service.currency',
                 'servicePrices.ageRange',
                 'portfolios' => fn ($portfolioQuery) => $this->scopePortfoliosForViewer($portfolioQuery, $isAdmin || $isOwnerView),
             ]);
@@ -90,7 +92,9 @@ class ServiceController extends Controller
             'professionel',
             'salon',
             'category',
+            'currency',
             'servicePrices' => fn ($priceQuery) => $this->scopeServicePricesForViewer($priceQuery, $this->permissionService->canManageService($user, $service)),
+            'servicePrices.service.currency',
             'servicePrices.ageRange',
             'portfolios' => fn ($portfolioQuery) => $this->scopePortfoliosForViewer($portfolioQuery, $this->permissionService->canManageService($user, $service)),
         ]);
@@ -179,6 +183,8 @@ class ServiceController extends Controller
             'professionel',
             'salon',
             'category',
+            'currency',
+            'servicePrices.service.currency',
             'servicePrices.ageRange',
             'portfolios',
         ]);
@@ -272,6 +278,8 @@ class ServiceController extends Controller
             'professionel',
             'salon',
             'category',
+            'currency',
+            'servicePrices.service.currency',
             'servicePrices.ageRange',
             'portfolios',
         ]);

@@ -8,6 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['service_id', 'age_range_id', 'price', 'is_approved'])]
 class ServicePrice extends Model
 {
+    protected function casts(): array
+    {
+        return [
+            'price' => 'decimal:2',
+            'is_approved' => 'boolean',
+        ];
+    }
+
     public function service()
     {
         return $this->belongsTo(Service::class);

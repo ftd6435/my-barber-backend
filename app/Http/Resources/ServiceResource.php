@@ -19,6 +19,7 @@ class ServiceResource extends JsonResource
             'professionel_id' => $this->professionel_id,
             'salon_id' => $this->salon_id,
             'category_id' => $this->category_id,
+            'currency_id' => $this->currency_id,
             'name' => $this->name,
             'duration_minutes' => $this->duration_minutes,
             'is_active' => (bool) $this->is_active,
@@ -46,6 +47,14 @@ class ServiceResource extends JsonResource
                     'id' => $this->category?->id,
                     'name' => $this->category?->name,
                     'description' => $this->category?->description,
+                ];
+            }),
+            'currency' => $this->whenLoaded('currency', function () {
+                return [
+                    'id' => $this->currency?->id,
+                    'name' => $this->currency?->name,
+                    'code' => $this->currency?->code,
+                    'symbol' => $this->currency?->symbol,
                 ];
             }),
             'service_prices' => ServicePriceResource::collection($this->whenLoaded('servicePrices')),

@@ -2,13 +2,14 @@
 
 namespace App\Models\Activities;
 
+use App\Models\Currency;
 use App\Models\Salon;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['professionel_id', 'salon_id', 'category_id', 'name', 'duration_minutes', 'is_active'])]
+#[Fillable(['professionel_id', 'salon_id', 'category_id', 'currency_id', 'name', 'duration_minutes', 'is_active'])]
 class Service extends Model
 {
     use SoftDeletes;
@@ -26,6 +27,11 @@ class Service extends Model
     public function category()
     {
         return $this->belongsTo(Category::class, 'category_id');
+    }
+
+    public function currency()
+    {
+        return $this->belongsTo(Currency::class);
     }
 
     public function servicePrices()

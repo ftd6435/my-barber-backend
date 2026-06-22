@@ -88,6 +88,7 @@ class PaymentController extends Controller
 
         $payment = DjomyPayment::create([
             'booking_id'          => $booking->id,
+            'currency_id'         => $booking->client_currency_id,
             'merchant_reference' => $reference,
             'payment_method'     => $validated['paymentMethod'],
             'payer_identifier'   => $validated['payerIdentifier'],
@@ -114,7 +115,7 @@ class PaymentController extends Controller
             ]);
 
             if ($payment->fresh()->isSuccessful()) {
-                $this->bookingPaymentService->syncBookingPaymentStatus($booking);
+                $this->bookingPaymentService->applySuccessfulDirectPayment($payment->fresh());
             }
 
             $response = [
@@ -187,7 +188,8 @@ class PaymentController extends Controller
             ]);
 
             if ($payment->booking) {
-                $this->bookingPaymentService->syncBookingPaymentStatus($payment->booking);
+                $this->bookingPaymentService->applySuccessfulDirectPayment($payment->fresh());
+                $this->bookingPaymentService->syncBookingPaymentStatus($payment->booking->fresh());
             }
 
             return $this->successResponse(

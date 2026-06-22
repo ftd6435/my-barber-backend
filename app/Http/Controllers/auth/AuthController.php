@@ -36,10 +36,11 @@ class AuthController extends Controller
         $data['is_active'] = true;
 
         $user = User::create($data);
+        $user->loadMissing(['professionel', 'client', 'defaultCurrency']);
 
         $token = $user->createToken('auth')->plainTextToken;
 
-        return $this->successResponseWithToken($user, $token, "Utilisateur inscrit avec succès.");
+        return $this->successResponseWithToken(new UserResource($user), $token, "Utilisateur inscrit avec succès.");
     }
 
     // This methode is used to signup a user of role professionel or client
@@ -502,7 +503,7 @@ class AuthController extends Controller
 
     private function authenticatedUserResponse(User $user, string $token, string $message, int $code = 200)
     {
-        $user->loadMissing(['professionel', 'client']);
+        $user->loadMissing(['professionel', 'client', 'defaultCurrency']);
 
         return $this->successResponseWithToken(
             new UserResource($user),

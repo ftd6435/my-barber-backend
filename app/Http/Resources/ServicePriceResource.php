@@ -19,6 +19,13 @@ class ServicePriceResource extends JsonResource
             'service_id' => $this->service_id,
             'age_range_id' => $this->age_range_id,
             'price' => $this->price,
+            'currency' => $this->whenLoaded('service', function () {
+                return [
+                    'id' => $this->service?->currency?->id,
+                    'code' => $this->service?->currency?->code,
+                    'symbol' => $this->service?->currency?->symbol,
+                ];
+            }),
             'is_approved' => (bool) $this->is_approved,
             'age_range' => $this->whenLoaded('ageRange', function () {
                 return [

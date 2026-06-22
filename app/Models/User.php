@@ -11,6 +11,7 @@ use App\Models\Activities\BookinReview;
 use App\Models\Activities\ProAvailability;
 use App\Models\Activities\ProPortfolio;
 use App\Models\Activities\Service;
+use App\Services\WalletService;
 use App\Traits\CloudflareUpload;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -21,7 +22,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['first_name', 'last_name', 'telephone', 'username', 'email', 'role', 'avatar', 'is_phone_verified', 'is_email_verified', 'email_verified_at', 'phone_verified_at', 'is_approved', 'is_active', 'password'])]
+#[Fillable(['first_name', 'last_name', 'telephone', 'username', 'email', 'role', 'avatar', 'default_currency_id', 'is_phone_verified', 'is_email_verified', 'email_verified_at', 'phone_verified_at', 'is_approved', 'is_active', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -53,6 +54,18 @@ class User extends Authenticatable
         static::creating(function ($model) {
             $model->uuid = $model->uuid ?? (string) \Illuminate\Support\Str::uuid();
             $model->username = $model->username ?? '@' . $model->first_name . rand(0000, 9999);
+        });
+
+        static::created(function (self $user) {
+            if ($user->default_currency_id) {
+                app(WalletService::class)->ensureWallet($user, $user->default_currency_id);
+            }
+        });
+
+        static::updated(function (self $user) {
+            if ($user->wasChanged('default_currency_id') && $user->default_currency_id) {
+                app(WalletService::class)->ensureWallet($user, $user->default_currency_id);
+            }
         });
     }
 
@@ -96,6 +109,11 @@ class User extends Authenticatable
         return $this->hasMany(Service::class, 'professionel_id');
     }
 
+    public function defaultCurrency()
+    {
+        return $this->belongsTo(Currency::class, 'default_currency_id');
+    }
+
     public function proPortfolios()
     {
         return $this->hasMany(ProPortfolio::class, 'professionel_id');
@@ -104,6 +122,16 @@ class User extends Authenticatable
     public function client()
     {
         return $this->hasOne(Client::class);
+    }
+
+    public function wallets()
+    {
+        return $this->hasMany(Wallet::class);
+    }
+
+    public function withdrawalRequests()
+    {
+        return $this->hasMany(WithdrawalRequest::class);
     }
 
     /**

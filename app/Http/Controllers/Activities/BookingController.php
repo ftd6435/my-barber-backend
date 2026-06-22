@@ -10,8 +10,12 @@ use App\Http\Requests\activities\RejectBookingRequest;
 use App\Http\Requests\activities\StoreBookingRequest;
 use App\Http\Resources\BookingResource;
 use App\Models\Activities\Booking;
+use App\Models\Currency;
 use App\Models\Activities\Service as ActivityService;
+use App\Services\BookingCommissionService;
+use App\Services\BookingPaymentService;
 use App\Services\BookingNotificationService;
+use App\Services\CurrencyConversionService;
 use App\Services\PermissionService;
 use App\Traits\ApiResponses;
 use Carbon\Carbon;
@@ -26,6 +30,9 @@ class BookingController extends Controller
     public function __construct(
         private PermissionService $permissionService,
         private BookingNotificationService $bookingNotificationService,
+        private CurrencyConversionService $currencyConversionService,
+        private BookingPaymentService $bookingPaymentService,
+        private BookingCommissionService $bookingCommissionService,
     ) {
     }
 
@@ -35,8 +42,12 @@ class BookingController extends Controller
         $query = Booking::query()->with([
             'professionel',
             'client',
-            'service',
+            'service.currency',
+            'serviceCurrency',
+            'clientCurrency',
+            'settlementCurrency',
             'bookingPrices.ageRange',
+            'bookingPrices.currency',
         ]);
 
         if ($this->permissionService->isAdmin($user)) {
@@ -107,7 +118,9 @@ class BookingController extends Controller
         $service = ActivityService::query()
             ->with([
                 'professionel',
+                'currency',
                 'servicePrices' => fn ($query) => $query->where('is_approved', true),
+                'servicePrices.service.currency',
             ])
             ->findOrFail($data['service_id']);
 
@@ -119,6 +132,38 @@ class BookingController extends Controller
             return $this->errorResponse(
                 'Service indisponible.',
                 ['service_id' => 'Ce service n\'est pas disponible pour la réservation.'],
+                422
+            );
+        }
+
+        if (!$service->currency_id) {
+            return $this->errorResponse(
+                'Devise du service manquante.',
+                ['service' => 'Ce service ne dispose pas encore d\'une devise de facturation.'],
+                422
+            );
+        }
+
+        $clientCurrencyId = (int) ($data['client_currency_id'] ?? $client->default_currency_id);
+
+        if (!$clientCurrencyId || !Currency::query()->whereKey($clientCurrencyId)->exists()) {
+            return $this->errorResponse(
+                'Devise de paiement invalide.',
+                ['client_currency_id' => 'Veuillez définir une devise de paiement valide pour cette réservation.'],
+                422
+            );
+        }
+
+        try {
+            $conversion = $this->currencyConversionService->convert(
+                1,
+                (int) $service->currency_id,
+                $clientCurrencyId
+            );
+        } catch (\Throwable $e) {
+            return $this->errorResponse(
+                'Taux de change indisponible.',
+                ['client_currency_id' => $e->getMessage()],
                 422
             );
         }
@@ -137,7 +182,9 @@ class BookingController extends Controller
             );
         }
 
-        $booking = DB::transaction(function () use ($client, $data, $service, $ageRanges, $approvedPrices) {
+        $commissionPercentage = $this->bookingCommissionService->getActivePercentage();
+
+        $booking = DB::transaction(function () use ($client, $data, $service, $ageRanges, $approvedPrices, $clientCurrencyId, $conversion, $commissionPercentage) {
             $reference = $this->generateBookingReference();
             $startTime = Carbon::createFromFormat('H:i', $data['start_time']);
             $endTime = (clone $startTime)->addMinutes((int) $service->duration_minutes);
@@ -147,6 +194,9 @@ class BookingController extends Controller
                 'professionel_id' => $service->professionel_id,
                 'client_id' => $client->id,
                 'service_id' => $service->id,
+                'service_currency_id' => $service->currency_id,
+                'client_currency_id' => $clientCurrencyId,
+                'settlement_currency_id' => $service->currency_id,
                 'booking_date' => $data['booking_date'],
                 'start_time' => $startTime->format('H:i:s'),
                 'end_time' => $endTime->format('H:i:s'),
@@ -156,6 +206,15 @@ class BookingController extends Controller
                 'longitude' => $data['location'] === 'home' ? ($data['longitude'] ?? null) : null,
                 'status' => 'pending',
                 'payment_status' => 'pending',
+                'service_to_client_exchange_rate' => $conversion['rate'],
+                'service_subtotal_amount' => 0,
+                'service_total_amount' => 0,
+                'client_total_amount' => 0,
+                'settlement_total_amount' => 0,
+                'client_refunded_amount' => 0,
+                'platform_fee_percentage' => $commissionPercentage,
+                'platform_fee_amount' => 0,
+                'professionel_net_amount' => 0,
                 'booking_details' => $data['booking_details'] ?? null,
                 'extra_fees' => 0,
             ]);
@@ -165,12 +224,13 @@ class BookingController extends Controller
 
                 $booking->bookingPrices()->create([
                     'age_range_id' => $ageRangeId,
+                    'currency_id' => $service->currency_id,
                     'number' => $ageRange['number'],
                     'price' => $approvedPrice->price,
                 ]);
             }
 
-            return $booking;
+            return $this->bookingPaymentService->refreshBookingMonetarySnapshot($booking);
         });
 
         $this->loadBookingRelations($booking);
@@ -213,6 +273,8 @@ class BookingController extends Controller
             'cancel_reason' => null,
         ]);
 
+        $booking = $this->bookingPaymentService->refreshBookingMonetarySnapshot($booking);
+
         $this->loadBookingRelations($booking);
         $this->bookingNotificationService->notifyClientBookingAccepted($booking);
 
@@ -250,6 +312,12 @@ class BookingController extends Controller
             'extra_fees' => 0,
         ]);
 
+        $this->bookingPaymentService->refundBookingToClientWallet(
+            $booking->fresh(),
+            'Réservation refusée par le professionnel.'
+        );
+
+        $booking->refresh();
         $this->loadBookingRelations($booking);
         $this->bookingNotificationService->notifyClientBookingRejected($booking);
 
@@ -286,6 +354,12 @@ class BookingController extends Controller
             'cancel_reason' => $request->validated('cancel_reason'),
         ]);
 
+        $this->bookingPaymentService->refundBookingToClientWallet(
+            $booking->fresh(),
+            'Réservation annulée par le client.'
+        );
+
+        $booking->refresh();
         $this->loadBookingRelations($booking);
         $this->bookingNotificationService->notifyProfessionelBookingCancelled($booking);
 
@@ -329,6 +403,9 @@ class BookingController extends Controller
             'status' => 'completed',
         ]);
 
+        $this->bookingPaymentService->releaseBookingFundsToProfessionel($booking->fresh());
+
+        $booking->refresh();
         $this->loadBookingRelations($booking);
         $this->bookingNotificationService->notifyProfessionelBookingCompleted($booking);
 
@@ -343,8 +420,12 @@ class BookingController extends Controller
         $booking->loadMissing([
             'professionel',
             'client',
-            'service',
+            'service.currency',
+            'serviceCurrency',
+            'clientCurrency',
+            'settlementCurrency',
             'bookingPrices.ageRange',
+            'bookingPrices.currency',
         ]);
     }
 

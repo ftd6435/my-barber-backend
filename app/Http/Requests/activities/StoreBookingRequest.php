@@ -26,6 +26,7 @@ class StoreBookingRequest extends FormRequest
     {
         return [
             'service_id' => ['required', 'integer', 'exists:services,id'],
+            'client_currency_id' => ['nullable', 'integer', 'exists:currencies,id'],
             'booking_date' => ['required', 'date', 'after_or_equal:today'],
             'location' => ['nullable', Rule::in(['home', 'salon'])],
             'start_time' => ['required', 'date_format:H:i'],
@@ -45,6 +46,7 @@ class StoreBookingRequest extends FormRequest
         return [
             'service_id.required' => 'Le service est obligatoire.',
             'service_id.exists' => 'Le service sélectionné est invalide.',
+            'client_currency_id.exists' => 'La devise de paiement sélectionnée est invalide.',
             'booking_date.required' => 'La date de réservation est obligatoire.',
             'booking_date.after_or_equal' => 'La date de réservation doit être aujourd\'hui ou ultérieure.',
             'location.in' => 'Le lieu de réservation sélectionné est invalide.',
@@ -69,6 +71,7 @@ class StoreBookingRequest extends FormRequest
 
         $this->merge([
             'location' => $location ? strtolower(trim((string) $location)) : 'home',
+            'client_currency_id' => $this->input('client_currency_id') ?: $this->user()?->default_currency_id,
         ]);
     }
 }

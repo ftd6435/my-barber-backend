@@ -9,6 +9,9 @@ use App\Models\Activities\Service;
 use App\Models\Activities\ServicePrice;
 use App\Models\Salon;
 use App\Models\User;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
+use App\Models\WithdrawalRequest;
 use App\Traits\ApiResponses;
 use Illuminate\Http\Request;
 
@@ -200,6 +203,43 @@ class PermissionService
 
         return $this->canManageBookingReviewAsClient($user, $bookingReview)
             || $this->canSwitchBookingReviewVisibility($user, $bookingReview);
+    }
+
+    public function canManageWallet(?User $user, Wallet $wallet): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $this->isAdmin($user) || $wallet->user_id === $user->id;
+    }
+
+    public function canViewWallet(?User $user, Wallet $wallet): bool
+    {
+        return $this->canManageWallet($user, $wallet);
+    }
+
+    public function canViewWalletTransaction(?User $user, WalletTransaction $walletTransaction): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $this->isAdmin($user) || $walletTransaction->user_id === $user->id;
+    }
+
+    public function canManageWithdrawalRequest(?User $user, WithdrawalRequest $withdrawalRequest): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $this->isAdmin($user) || $withdrawalRequest->user_id === $user->id;
+    }
+
+    public function canViewWithdrawalRequest(?User $user, WithdrawalRequest $withdrawalRequest): bool
+    {
+        return $this->canManageWithdrawalRequest($user, $withdrawalRequest);
     }
 
     public function perPage(Request $request): int

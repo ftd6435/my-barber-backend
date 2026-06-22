@@ -26,7 +26,7 @@ class ServicePriceController extends Controller
     public function index(Request $request)
     {
         $user = Auth::guard('sanctum')->user();
-        $query = ServicePrice::query()->with(['service.professionel', 'ageRange']);
+        $query = ServicePrice::query()->with(['service.professionel', 'service.currency', 'ageRange']);
 
         if ($this->permissionService->isAdmin($user)) {
             // Admins can view every price.
@@ -64,7 +64,7 @@ class ServicePriceController extends Controller
     public function show(Request $request, ServicePrice $servicePrice)
     {
         $user = Auth::guard('sanctum')->user();
-        $servicePrice->loadMissing(['service.professionel', 'ageRange']);
+        $servicePrice->loadMissing(['service.professionel', 'service.currency', 'ageRange']);
 
         if (!$this->permissionService->canViewServicePrice($user, $servicePrice)) {
             return $this->errorResponse(
@@ -86,7 +86,7 @@ class ServicePriceController extends Controller
             return $authorization;
         }
 
-        $service = ActivityService::with('professionel')->findOrFail($request->integer('service_id'));
+        $service = ActivityService::with(['professionel', 'currency'])->findOrFail($request->integer('service_id'));
 
         if (!$this->permissionService->canManageService($request->user(), $service)) {
             return $this->errorResponse(
@@ -110,7 +110,7 @@ class ServicePriceController extends Controller
             'is_approved' => false,
         ]);
 
-        $servicePrice->loadMissing(['service.professionel', 'ageRange']);
+        $servicePrice->loadMissing(['service.professionel', 'service.currency', 'ageRange']);
         $this->priceApprovalNotificationService->sendPendingApprovalNotifications($service, 1);
 
         return $this->successResponse(
@@ -126,7 +126,7 @@ class ServicePriceController extends Controller
             return $authorization;
         }
 
-        $servicePrice->loadMissing('service.professionel');
+        $servicePrice->loadMissing(['service.professionel', 'service.currency']);
 
         if (!$this->permissionService->canManageServicePrice($request->user(), $servicePrice)) {
             return $this->errorResponse(
@@ -136,7 +136,7 @@ class ServicePriceController extends Controller
             );
         }
 
-        $targetService = ActivityService::with('professionel')->findOrFail($request->integer('service_id'));
+        $targetService = ActivityService::with(['professionel', 'currency'])->findOrFail($request->integer('service_id'));
 
         if (!$this->permissionService->canManageService($request->user(), $targetService)) {
             return $this->errorResponse(
@@ -167,7 +167,7 @@ class ServicePriceController extends Controller
             'is_approved' => false,
         ]);
 
-        $servicePrice->loadMissing(['service.professionel', 'ageRange']);
+        $servicePrice->loadMissing(['service.professionel', 'service.currency', 'ageRange']);
         $this->priceApprovalNotificationService->sendPendingApprovalNotifications($servicePrice->service, 1);
 
         return $this->successResponse(
@@ -182,7 +182,7 @@ class ServicePriceController extends Controller
             return $authorization;
         }
 
-        $servicePrice->loadMissing('service.professionel');
+        $servicePrice->loadMissing(['service.professionel', 'service.currency']);
 
         if (!$this->permissionService->canManageServicePrice($request->user(), $servicePrice)) {
             return $this->errorResponse(

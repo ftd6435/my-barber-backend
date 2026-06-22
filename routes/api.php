@@ -11,12 +11,16 @@ use App\Http\Controllers\Activities\ProAvailabilityController;
 use App\Http\Controllers\Activities\ProPortfolioController;
 use App\Http\Controllers\Activities\ServiceController;
 use App\Http\Controllers\Activities\ServicePriceController;
+use App\Http\Controllers\BookingCommissionSettingController;
 use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\Djomy\PaymentController;
 use App\Http\Controllers\Djomy\PaymentLinkController;
 use App\Http\Controllers\Djomy\WebhookController;
+use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\SalonController;
-use Illuminate\Http\Request;
+use App\Http\Controllers\WalletController;
+use App\Http\Controllers\WalletTransactionController;
+use App\Http\Controllers\WithdrawalRequestController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/auth')->group(function () {
@@ -101,12 +105,49 @@ Route::prefix('v1/currencies')->group(function () {
     });
 });
 
+Route::prefix('v1/exchange-rates')->group(function () {
+    Route::get('/', [ExchangeRateController::class, 'index']);
+    Route::get('/{exchangeRate}', [ExchangeRateController::class, 'show']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/', [ExchangeRateController::class, 'store']);
+        Route::put('/{exchangeRate}', [ExchangeRateController::class, 'update']);
+        Route::delete('/{exchangeRate}', [ExchangeRateController::class, 'destroy']);
+    });
+});
+
+Route::middleware('auth:sanctum')->prefix('v1/booking-commission-settings')->group(function () {
+    Route::get('/', [BookingCommissionSettingController::class, 'index']);
+    Route::get('/active', [BookingCommissionSettingController::class, 'active']);
+    Route::get('/{bookingCommissionSetting}', [BookingCommissionSettingController::class, 'show']);
+    Route::post('/', [BookingCommissionSettingController::class, 'store']);
+    Route::put('/{bookingCommissionSetting}', [BookingCommissionSettingController::class, 'update']);
+});
+
 Route::middleware('auth:sanctum')->prefix('v1/pro-availabilities')->group(function () {
     Route::get('/', [ProAvailabilityController::class, 'index']);
     Route::get('/{proAvailability}', [ProAvailabilityController::class, 'show']);
     Route::post('/', [ProAvailabilityController::class, 'store']);
     Route::put('/{proAvailability}', [ProAvailabilityController::class, 'update']);
     Route::delete('/{proAvailability}', [ProAvailabilityController::class, 'destroy']);
+});
+
+Route::middleware('auth:sanctum')->prefix('v1/wallets')->group(function () {
+    Route::get('/', [WalletController::class, 'index']);
+    Route::get('/{wallet}', [WalletController::class, 'show']);
+});
+
+Route::middleware('auth:sanctum')->prefix('v1/wallet-transactions')->group(function () {
+    Route::get('/', [WalletTransactionController::class, 'index']);
+    Route::get('/{walletTransaction}', [WalletTransactionController::class, 'show']);
+});
+
+Route::middleware('auth:sanctum')->prefix('v1/withdrawal-requests')->group(function () {
+    Route::get('/', [WithdrawalRequestController::class, 'index']);
+    Route::post('/', [WithdrawalRequestController::class, 'store']);
+    Route::get('/{withdrawalRequest}', [WithdrawalRequestController::class, 'show']);
+    Route::patch('/{withdrawalRequest}/process', [WithdrawalRequestController::class, 'process']);
+    Route::patch('/{withdrawalRequest}/cancel', [WithdrawalRequestController::class, 'cancel']);
 });
 
 Route::prefix('v1/services')->group(function () {

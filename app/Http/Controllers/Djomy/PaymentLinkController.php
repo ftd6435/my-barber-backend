@@ -115,6 +115,7 @@ class PaymentLinkController extends Controller
             // Persist the link locally
             $link = DjomyPaymentLink::create([
                 'booking_id'             => $booking->id,
+                'currency_id'            => $booking->client_currency_id,
                 'djomy_reference'        => $result['reference'] ?? $result['id'] ?? null,
                 'merchant_reference'     => $merchantReference,
                 'link_name'              => $validated['linkName'] ?? ('Paiement réservation ' . $booking->reference),
@@ -172,8 +173,13 @@ class PaymentLinkController extends Controller
             // Sync local record
             $link->update([
                 'status'         => strtoupper($result['status'] ?? 'ACTIVE'),
+                'paid_amount' => isset($result['paidAmount']) ? round((float) $result['paidAmount'], 2) : $link->paid_amount,
                 'djomy_response' => $result,
             ]);
+
+            if (strtoupper($link->status) === 'SUCCESS') {
+                $this->bookingPaymentService->applySuccessfulPaymentLink($link->fresh());
+            }
 
             return $this->successResponse(
                 ['payment_link' => $result],

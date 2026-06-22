@@ -29,6 +29,7 @@ class RegisterRequest extends FormRequest
             'telephone' => ['required', 'string', 'max:255', 'regex:/^\+?[0-9]{8,15}$/u'],
             'email' => ['required', 'string', 'email:255', 'max:255'],
             'role' => ['required', 'in:professionel,client'],
+            'default_currency_id' => ['required', 'integer', 'exists:currencies,id'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
 
             'professionel' => ['nullable', 'array'],
@@ -69,6 +70,8 @@ class RegisterRequest extends FormRequest
             'email.string' => "L'e-mail doit être une chaine de caractères",
             'email.max' => "L'e-mail ne peut pas dépasser :max caractères",
             'email.email' => "L'e-mail n'est pas valide",
+            'default_currency_id.required' => "La devise par défaut est obligatoire",
+            'default_currency_id.exists' => "La devise par défaut sélectionnée est invalide",
             'password.required' => "Le mot de passe est obligatoire",
             'password.confirmed' => "Le mot de passe et la confirmation ne correspondent pas",
         ];

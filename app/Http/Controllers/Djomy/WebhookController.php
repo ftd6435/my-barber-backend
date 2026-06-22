@@ -161,7 +161,18 @@ class WebhookController extends Controller
         $paymentStatus = null;
 
         if ($booking) {
-            $booking = $this->bookingPaymentService->syncBookingPaymentStatus($booking);
+            $payment = DjomyPayment::query()->where('merchant_reference', $reference)->first();
+            $paymentLink = !$payment
+                ? DjomyPaymentLink::query()->where('merchant_reference', $reference)->orWhere('djomy_reference', $reference)->first()
+                : null;
+
+            if ($payment) {
+                $this->bookingPaymentService->applySuccessfulDirectPayment($payment);
+            } elseif ($paymentLink) {
+                $this->bookingPaymentService->applySuccessfulPaymentLink($paymentLink);
+            }
+
+            $booking = $this->bookingPaymentService->syncBookingPaymentStatus($booking->fresh());
             $paymentStatus = $booking->payment_status;
         }
 

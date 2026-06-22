@@ -25,6 +25,7 @@ class StoreServiceRequest extends FormRequest
         return [
             'salon_id' => ['required', 'integer', 'exists:salons,id'],
             'category_id' => ['required', 'integer', 'exists:categories,id'],
+            'currency_id' => ['required', 'integer', 'exists:currencies,id'],
             'name' => ['required', 'string', 'max:255'],
             'duration_minutes' => ['required', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
@@ -43,6 +44,8 @@ class StoreServiceRequest extends FormRequest
             'salon_id.exists' => 'Le salon sélectionné est invalide.',
             'category_id.required' => 'La catégorie est obligatoire.',
             'category_id.exists' => 'La catégorie sélectionnée est invalide.',
+            'currency_id.required' => 'La devise du service est obligatoire.',
+            'currency_id.exists' => 'La devise du service sélectionnée est invalide.',
             'name.required' => 'Le nom du service est obligatoire.',
             'duration_minutes.required' => 'La durée du service est obligatoire.',
             'duration_minutes.integer' => 'La durée doit être un nombre entier de minutes.',
