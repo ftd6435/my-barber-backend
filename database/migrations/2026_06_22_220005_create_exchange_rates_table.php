@@ -18,7 +18,7 @@ return new class extends Migration
             $table->timestamp('fetched_at')->nullable();
             $table->timestamps();
 
-            $table->index(['base_currency_id', 'quote_currency_id', 'is_active']);
+            $table->index(['base_currency_id', 'quote_currency_id', 'is_active'], 'exr_base_quote_active_idx');
         });
     }
 
