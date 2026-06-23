@@ -29,7 +29,7 @@ Route::prefix('v1/auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
     Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
-    Route::get('/verify-email/{uuid}', [AuthController::class, 'verifyEmail']);
+    Route::get('/verify-email/{uuid}', [AuthController::class, 'verifyEmail'])->name('auth.verify-email');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/resend-email', [AuthController::class, 'resendEmail']);

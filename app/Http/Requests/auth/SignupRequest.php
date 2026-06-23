@@ -26,8 +26,8 @@ class SignupRequest extends FormRequest
         return [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
-            'telephone' => ['required', 'string', 'max:255', 'regex:/^\+?[0-9]{8,15}$/u'],
-            'email' => ['required', 'string', 'email:255', 'max:255'],
+            'telephone' => ['required', 'string', 'max:255', 'regex:/^\+?[0-9]{8,15}$/u', 'unique:users,telephone'],
+            'email' => ['required', 'string', 'email:255', 'max:255', 'unique:users,email'],
             'default_currency_id' => ['required', 'integer', 'exists:currencies,id'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ];
