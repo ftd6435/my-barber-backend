@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\auth;
 
+use App\Events\SendMessageEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\user\StoreUserRequest;
 use App\Http\Requests\user\UpdateUserRequest;
@@ -20,8 +21,7 @@ class UserController extends Controller
 
     public function __construct(
         private PermissionService $permissionService,
-    ) {
-    }
+    ) {}
 
     /** Display all users in database of role professionel & client */
     public function index(Request $request)
@@ -150,6 +150,10 @@ class UserController extends Controller
 
         $user->is_approved = !$user->is_approved;
         $user->save();
+
+        if ($user->role === 'professionel' && !empty($user->telephone)) {
+            SendMessageEvent::dispatch($user->telephone, $this->approvalStatusSms($user->is_approved));
+        }
 
         return $this->successResponse(
             new UserResource($user),
@@ -317,5 +321,12 @@ class UserController extends Controller
                 'total' => $users->total(),
             ],
         ], $message);
+    }
+
+    private function approvalStatusSms(bool $isApproved): string
+    {
+        return $isApproved
+            ? 'Kegny: votre compte pro est approuvé. Vous pouvez maintenant recevoir des reservations.'
+            : 'Kegny: votre compte pro a ete desapprouvé. Mettez votre profil a jour puis contactez le support.';
     }
 }
