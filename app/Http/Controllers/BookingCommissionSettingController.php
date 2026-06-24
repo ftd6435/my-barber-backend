@@ -16,8 +16,7 @@ class BookingCommissionSettingController extends Controller
 
     public function __construct(
         private PermissionService $permissionService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -135,6 +134,37 @@ class BookingCommissionSettingController extends Controller
         return $this->successResponse(
             new BookingCommissionSettingResource($bookingCommissionSetting),
             'Configuration de commission mise à jour avec succès.'
+        );
+    }
+
+    public function switchStatus(Request $request, BookingCommissionSetting $bookingCommissionSetting)
+    {
+        if ($authorization = $this->permissionService->authorizeRoles($request->user(), ['super_admin', 'admin'])) {
+            return $authorization;
+        }
+
+        DB::transaction(function () use ($request, $bookingCommissionSetting) {
+            $isActive = !$bookingCommissionSetting->is_active;
+
+            if ($isActive === true) {
+                BookingCommissionSetting::query()
+                    ->where('id', '!=', $bookingCommissionSetting->id)
+                    ->update(['is_active' => false]);
+            }
+
+            $bookingCommissionSetting->update([
+                'is_active' => $isActive,
+                'updated_by' => $request->user()->id,
+            ]);
+        });
+
+        $bookingCommissionSetting->refresh()->loadMissing('updatedBy');
+
+        return $this->successResponse(
+            new BookingCommissionSettingResource($bookingCommissionSetting),
+            $bookingCommissionSetting->is_active
+                ? 'Configuration de commission activée avec succès.'
+                : 'Configuration de commission désactivée avec succès.'
         );
     }
 }

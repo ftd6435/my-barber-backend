@@ -113,6 +113,7 @@ Route::prefix('v1/exchange-rates')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [ExchangeRateController::class, 'store']);
         Route::put('/{exchangeRate}', [ExchangeRateController::class, 'update']);
+        Route::patch('/{exchangeRate}/status', [ExchangeRateController::class, 'switchStatus']);
         Route::delete('/{exchangeRate}', [ExchangeRateController::class, 'destroy']);
     });
 });
@@ -123,6 +124,7 @@ Route::middleware('auth:sanctum')->prefix('v1/booking-commission-settings')->gro
     Route::get('/{bookingCommissionSetting}', [BookingCommissionSettingController::class, 'show']);
     Route::post('/', [BookingCommissionSettingController::class, 'store']);
     Route::put('/{bookingCommissionSetting}', [BookingCommissionSettingController::class, 'update']);
+    Route::patch('/{bookingCommissionSetting}/status', [BookingCommissionSettingController::class, 'switchStatus']);
 });
 
 Route::middleware('auth:sanctum')->prefix('v1/pro-availabilities')->group(function () {

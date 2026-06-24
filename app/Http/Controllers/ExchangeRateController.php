@@ -107,6 +107,33 @@ class ExchangeRateController extends Controller
         );
     }
 
+    public function switchStatus(Request $request, ExchangeRate $exchangeRate)
+    {
+        if ($authorization = $this->permissionService->authorizeRoles($request->user(), ['super_admin', 'admin'])) {
+            return $authorization;
+        }
+
+        $isActive = !$exchangeRate->is_active;
+
+        if ($isActive === true) {
+            ExchangeRate::query()
+                ->where('id', '!=', $exchangeRate->id)
+                ->where('base_currency_id', $exchangeRate->base_currency_id)
+                ->where('quote_currency_id', $exchangeRate->quote_currency_id)
+                ->update(['is_active' => false]);
+        }
+
+        $exchangeRate->update(['is_active' => $isActive]);
+        $exchangeRate->loadMissing(['baseCurrency', 'quoteCurrency']);
+
+        return $this->successResponse(
+            new ExchangeRateResource($exchangeRate),
+            $exchangeRate->is_active
+                ? 'Taux de change activé avec succès.'
+                : 'Taux de change désactivé avec succès.'
+        );
+    }
+
     public function destroy(Request $request, ExchangeRate $exchangeRate)
     {
         if ($authorization = $this->permissionService->authorizeRoles($request->user(), ['super_admin', 'admin'])) {
