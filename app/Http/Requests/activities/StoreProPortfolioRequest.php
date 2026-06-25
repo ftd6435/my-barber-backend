@@ -29,7 +29,6 @@ class StoreProPortfolioRequest extends FormRequest
         return [
             'service_id' => ['nullable', 'integer', 'exists:services,id'],
             'image' => $imageRule,
-            'is_active' => ['nullable', 'boolean'],
         ];
     }
 
