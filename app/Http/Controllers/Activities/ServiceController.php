@@ -23,8 +23,7 @@ class ServiceController extends Controller
     public function __construct(
         private PermissionService $permissionService,
         private ServicePriceApprovalNotificationService $priceApprovalNotificationService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -38,10 +37,10 @@ class ServiceController extends Controller
                 'salon',
                 'category',
                 'currency',
-                'servicePrices' => fn ($priceQuery) => $this->scopeServicePricesForViewer($priceQuery, $isAdmin || $isOwnerView),
+                'servicePrices' => fn($priceQuery) => $this->scopeServicePricesForViewer($priceQuery, $isAdmin || $isOwnerView),
                 'servicePrices.service.currency',
                 'servicePrices.ageRange',
-                'portfolios' => fn ($portfolioQuery) => $this->scopePortfoliosForViewer($portfolioQuery, $isAdmin || $isOwnerView),
+                'portfolios' => fn($portfolioQuery) => $this->scopePortfoliosForViewer($portfolioQuery, $isAdmin || $isOwnerView),
             ]);
 
         if ($isAdmin) {
@@ -51,7 +50,7 @@ class ServiceController extends Controller
         } else {
             $query
                 ->where('is_active', true)
-                ->whereHas('professionel', fn ($professionelQuery) => $professionelQuery
+                ->whereHas('professionel', fn($professionelQuery) => $professionelQuery
                     ->where('is_active', true)
                     ->where('is_approved', true));
         }
@@ -93,10 +92,10 @@ class ServiceController extends Controller
             'salon',
             'category',
             'currency',
-            'servicePrices' => fn ($priceQuery) => $this->scopeServicePricesForViewer($priceQuery, $this->permissionService->canManageService($user, $service)),
+            'servicePrices' => fn($priceQuery) => $this->scopeServicePricesForViewer($priceQuery, $this->permissionService->canManageService($user, $service)),
             'servicePrices.service.currency',
             'servicePrices.ageRange',
-            'portfolios' => fn ($portfolioQuery) => $this->scopePortfoliosForViewer($portfolioQuery, $this->permissionService->canManageService($user, $service)),
+            'portfolios' => fn($portfolioQuery) => $this->scopePortfoliosForViewer($portfolioQuery, $this->permissionService->canManageService($user, $service)),
         ]);
 
         if (!$this->permissionService->canViewService($user, $service)) {
@@ -189,9 +188,9 @@ class ServiceController extends Controller
             'portfolios',
         ]);
 
-        if ($createdPriceCount > 0) {
-            $this->priceApprovalNotificationService->sendPendingApprovalNotifications($service, $createdPriceCount);
-        }
+        // if ($createdPriceCount > 0) {
+        //     $this->priceApprovalNotificationService->sendPendingApprovalNotifications($service, $createdPriceCount);
+        // }
 
         return $this->successResponse(
             new ServiceResource($service),
