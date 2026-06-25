@@ -182,6 +182,7 @@ Route::prefix('v1/pro-portfolios')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [ProPortfolioController::class, 'store']);
         Route::put('/{proPortfolio}', [ProPortfolioController::class, 'update']);
+        Route::patch('/{proPortfolio}/active', [ProPortfolioController::class, 'switchActive']);
         Route::delete('/{proPortfolio}', [ProPortfolioController::class, 'destroy']);
     });
 });

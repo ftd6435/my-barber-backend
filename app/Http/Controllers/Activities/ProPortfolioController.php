@@ -206,6 +206,32 @@ class ProPortfolioController extends Controller
         );
     }
 
+    public function switchActive(Request $request, ProPortfolio $proPortfolio)
+    {
+        if ($authorization = $this->permissionService->authorizeRole($request->user(), 'professionel')) {
+            return $authorization;
+        }
+
+        if (!$this->permissionService->canManageProPortfolio($request->user(), $proPortfolio)) {
+            return $this->errorResponse(
+                'Action non autorisée.',
+                ['portfolio' => 'Vous ne pouvez modifier que vos propres portfolios.'],
+                403
+            );
+        }
+
+        $proPortfolio->is_active = !$proPortfolio->is_active;
+        $proPortfolio->save();
+        $proPortfolio->refresh()->loadMissing(['professionel', 'service.professionel']);
+
+        return $this->successResponse(
+            new ProPortfolioResource($proPortfolio),
+            $proPortfolio->is_active
+                ? 'Portfolio activé avec succès.'
+                : 'Portfolio désactivé avec succès.'
+        );
+    }
+
     public function destroy(Request $request, ProPortfolio $proPortfolio)
     {
         if ($authorization = $this->permissionService->authorizeRole($request->user(), 'professionel')) {

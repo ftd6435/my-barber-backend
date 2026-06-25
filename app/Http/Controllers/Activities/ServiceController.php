@@ -188,9 +188,9 @@ class ServiceController extends Controller
             'portfolios',
         ]);
 
-        // if ($createdPriceCount > 0) {
-        //     $this->priceApprovalNotificationService->sendPendingApprovalNotifications($service, $createdPriceCount);
-        // }
+        if ($createdPriceCount > 0) {
+            $this->priceApprovalNotificationService->sendPendingApprovalNotifications($service, $createdPriceCount);
+        }
 
         return $this->successResponse(
             new ServiceResource($service),

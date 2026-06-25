@@ -14,7 +14,7 @@ class ServicePriceApprovalNotificationService
         $service->loadMissing(['professionel', 'salon']);
 
         if ($service->professionel?->email) {
-            Mail::to($service->professionel->email)->send(
+            Mail::to($service->professionel->email)->queue(
                 new ServicePricesPendingApprovalMail($service, $pricesCount, 'owner')
             );
         }
@@ -30,7 +30,7 @@ class ServicePriceApprovalNotificationService
             ->all();
 
         if ($adminEmails !== []) {
-            Mail::to($adminEmails)->send(
+            Mail::to($adminEmails)->queue(
                 new ServicePricesPendingApprovalMail($service, $pricesCount, 'admin')
             );
         }
