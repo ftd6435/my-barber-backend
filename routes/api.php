@@ -160,6 +160,7 @@ Route::prefix('v1/services')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [ServiceController::class, 'store']);
         Route::put('/{service}', [ServiceController::class, 'update']);
+        Route::patch('/{service}/status', [ServiceController::class, 'switchStatus']);
         Route::delete('/{service}', [ServiceController::class, 'destroy']);
     });
 });

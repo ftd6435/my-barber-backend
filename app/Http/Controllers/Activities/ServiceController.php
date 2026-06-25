@@ -317,6 +317,36 @@ class ServiceController extends Controller
         );
     }
 
+    public function switchStatus(Request $request, ActivityService $service)
+    {
+        if (!$this->permissionService->canManageService($request->user(), $service)) {
+            return $this->errorResponse(
+                'Action non autorisée.',
+                ['service' => 'Vous ne pouvez modifier que vos propres services.'],
+                403
+            );
+        }
+
+        $service->is_active = !$service->is_active;
+        $service->save();
+        $service->refresh()->load([
+            'professionel',
+            'salon',
+            'category',
+            'currency',
+            'servicePrices.service.currency',
+            'servicePrices.ageRange',
+            'portfolios',
+        ]);
+
+        return $this->successResponse(
+            new ServiceResource($service),
+            $service->is_active
+                ? 'Service activé avec succès.'
+                : 'Service désactivé avec succès.'
+        );
+    }
+
     private function scopeServicePricesForViewer($query, bool $canViewAll)
     {
         if (!$canViewAll) {
