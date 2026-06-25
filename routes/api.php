@@ -132,6 +132,7 @@ Route::middleware('auth:sanctum')->prefix('v1/pro-availabilities')->group(functi
     Route::get('/{proAvailability}', [ProAvailabilityController::class, 'show']);
     Route::post('/', [ProAvailabilityController::class, 'store']);
     Route::put('/{proAvailability}', [ProAvailabilityController::class, 'update']);
+    Route::patch('/{proAvailability}/status', [ProAvailabilityController::class, 'switchStatus']);
     Route::delete('/{proAvailability}', [ProAvailabilityController::class, 'destroy']);
 });
 

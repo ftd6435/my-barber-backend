@@ -159,6 +159,32 @@ class ProAvailabilityController extends Controller
         );
     }
 
+    public function switchStatus(Request $request, ProAvailability $proAvailability)
+    {
+        if ($authorization = $this->permissionService->authorizeRole($request->user(), 'professionel')) {
+            return $authorization;
+        }
+
+        if ($proAvailability->professionel_id !== $request->user()->id) {
+            return $this->errorResponse(
+                'Action non autorisée.',
+                ['availability' => 'Vous ne pouvez modifier que vos propres disponibilités.'],
+                403
+            );
+        }
+
+        $proAvailability->is_active = !$proAvailability->is_active;
+        $proAvailability->save();
+        $proAvailability->loadMissing('professionel');
+
+        return $this->successResponse(
+            new ProAvailabilityResource($proAvailability),
+            $proAvailability->is_active
+                ? 'Disponibilité activée avec succès.'
+                : 'Disponibilité désactivée avec succès.'
+        );
+    }
+
     /**
      * Only user of role professionel can perform this action to delete his own availabilities
      */

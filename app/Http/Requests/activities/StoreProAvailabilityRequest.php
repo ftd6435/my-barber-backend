@@ -40,6 +40,7 @@ class StoreProAvailabilityRequest extends FormRequest
             ],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+            'is_active' => ['nullable', 'boolean'],
         ];
     }
 
@@ -54,6 +55,7 @@ class StoreProAvailabilityRequest extends FormRequest
             'end_time.required' => 'L\'heure de fin est obligatoire.',
             'end_time.date_format' => 'L\'heure de fin doit être au format HH:MM.',
             'end_time.after' => 'L\'heure de fin doit être postérieure à l\'heure de début.',
+            'is_active.boolean' => 'Le statut doit être une valeur booléenne valide.',
         ];
     }
 

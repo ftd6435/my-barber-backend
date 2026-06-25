@@ -20,6 +20,7 @@ class ProAvailabilityResource extends JsonResource
             'day_of_week' => $this->day_of_week,
             'start_time' => $this->start_time,
             'end_time' => $this->end_time,
+            'is_active' => (bool) $this->is_active,
             'professionel' => $this->whenLoaded('professionel', function () {
                 return [
                     'id' => $this->professionel?->id,
