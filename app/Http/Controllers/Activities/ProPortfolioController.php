@@ -20,8 +20,7 @@ class ProPortfolioController extends Controller
 
     public function __construct(
         private PermissionService $permissionService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -38,13 +37,13 @@ class ProPortfolioController extends Controller
                 ->where(function ($portfolioQuery) {
                     $portfolioQuery
                         ->whereNull('service_id')
-                        ->orWhereHas('service', fn ($serviceQuery) => $serviceQuery
+                        ->orWhereHas('service', fn($serviceQuery) => $serviceQuery
                             ->where('is_active', true)
-                            ->whereHas('professionel', fn ($professionelQuery) => $professionelQuery
+                            ->whereHas('professionel', fn($professionelQuery) => $professionelQuery
                                 ->where('is_active', true)
                                 ->where('is_approved', true)));
                 })
-                ->whereHas('professionel', fn ($professionelQuery) => $professionelQuery
+                ->whereHas('professionel', fn($professionelQuery) => $professionelQuery
                     ->where('is_active', true)
                     ->where('is_approved', true));
         }
@@ -118,7 +117,6 @@ class ProPortfolioController extends Controller
             $portfolio = $user->proPortfolios()->create([
                 'service_id' => $service?->id,
                 'image' => $uploadedImage,
-                'is_active' => $request->boolean('is_active', true),
             ]);
         } catch (\Throwable $e) {
             $this->deleteImage($uploadedImage, 'pro-portfolios');
@@ -169,7 +167,6 @@ class ProPortfolioController extends Controller
 
         $data = [
             'service_id' => array_key_exists('service_id', $validated) ? $validated['service_id'] : $proPortfolio->service_id,
-            'is_active' => $request->boolean('is_active', $proPortfolio->is_active),
         ];
 
         $oldImage = $proPortfolio->image;
