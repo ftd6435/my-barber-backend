@@ -17,8 +17,7 @@ class SalonController extends Controller
 
     public function __construct(
         private PermissionService $permissionService,
-    ) {
-    }
+    ) {}
 
     /**
      * Display a listing of the resource of all salons regardless of the owner and is public not protected with auth:sanctum middleware.
@@ -275,14 +274,6 @@ class SalonController extends Controller
             );
         }
 
-        if ($salon->logo) {
-            $this->deleteImage($salon->logo, 'salons-photos');
-        }
-
-        if ($salon->banner) {
-            $this->deleteImage($salon->banner, 'salons-photos');
-        }
-
         $salon->delete();
 
         return $this->noContentSuccessResponse(
@@ -290,5 +281,4 @@ class SalonController extends Controller
             200
         );
     }
-
 }
