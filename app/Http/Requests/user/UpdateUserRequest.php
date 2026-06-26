@@ -33,8 +33,6 @@ class UpdateUserRequest extends FormRequest
             'telephone' => ['sometimes', 'string', 'max:255', 'regex:/^\+?[0-9]{8,15}$/u', Rule::unique('users', 'telephone')->ignore($userId)],
             'email' => ['sometimes', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'default_currency_id' => ['sometimes', 'integer', 'exists:currencies,id'],
-            'current_password' => ['required_with:password', 'current_password'],
-            'password' => ['sometimes', 'nullable', 'string', 'min:8', 'confirmed'],
         ];
     }
 
@@ -48,10 +46,6 @@ class UpdateUserRequest extends FormRequest
             'email.unique' => 'Cette adresse e-mail est déjà utilisée.',
             'username.unique' => 'Ce nom d\'utilisateur est déjà utilisé.',
             'default_currency_id.exists' => 'La devise par défaut sélectionnée est invalide.',
-            'current_password.required_with' => 'Le mot de passe actuel est obligatoire pour définir un nouveau mot de passe.',
-            'current_password.current_password' => 'Le mot de passe actuel est incorrect.',
-            'password.min' => 'Le nouveau mot de passe doit contenir au moins 8 caractères.',
-            'password.confirmed' => 'Le nouveau mot de passe et sa confirmation ne correspondent pas.',
         ];
     }
 }

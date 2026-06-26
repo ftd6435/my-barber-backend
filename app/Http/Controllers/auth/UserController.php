@@ -4,6 +4,7 @@ namespace App\Http\Controllers\auth;
 
 use App\Events\SendMessageEvent;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\user\ChangePasswordRequest;
 use App\Http\Requests\user\StoreUserRequest;
 use App\Http\Requests\user\UpdateUserRequest;
 use App\Http\Resources\UserResource;
@@ -250,14 +251,6 @@ class UserController extends Controller
         $user = $request->user();
         $data = $request->validated();
 
-        if (isset($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
-        } else {
-            unset($data['password']);
-        }
-
-        unset($data['current_password']);
-
         if (array_key_exists('email', $data) && $data['email'] !== $user->email) {
             $data['is_email_verified'] = false;
             $data['email_verified_at'] = null;
@@ -274,6 +267,31 @@ class UserController extends Controller
         return $this->successResponse(
             new UserResource($user),
             'Profil mis à jour avec succès.'
+        );
+    }
+
+    public function changePassword(ChangePasswordRequest $request)
+    {
+        $user = $request->user();
+        $data = $request->validated();
+
+        if (!Hash::check($data['current_password'], $user->password)) {
+            return $this->errorResponse(
+                'Le mot de passe actuel est incorrect.',
+                ['current_password' => 'Le mot de passe actuel est incorrect.'],
+                422
+            );
+        }
+
+        $user->update([
+            'password' => Hash::make($data['password']),
+        ]);
+
+        $user->loadMissing(['professionel', 'client', 'defaultCurrency']);
+
+        return $this->successResponse(
+            new UserResource($user),
+            'Mot de passe modifié avec succès.'
         );
     }
 

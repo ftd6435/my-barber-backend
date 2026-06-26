@@ -43,6 +43,7 @@ Route::middleware('auth:sanctum')->prefix('v1/users')->group(function () {
     Route::post('/', [UserController::class, 'store']);
     Route::get('/me', [UserController::class, 'me']);
     Route::put('/me', [UserController::class, 'update']);
+    Route::patch('/me/password', [UserController::class, 'changePassword']);
     Route::post('/me/avatar', [UserController::class, 'updateAvatar']);
     Route::post('/avatar', [UserController::class, 'updateAvatar']);
     Route::get('/{uuid}', [UserController::class, 'show']);
