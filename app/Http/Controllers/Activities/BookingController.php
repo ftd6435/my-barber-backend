@@ -198,7 +198,6 @@ class BookingController extends Controller
                 'settlement_currency_id' => $service->currency_id,
                 'booking_date' => $data['booking_date'],
                 'start_time' => $startTime->format('H:i:s'),
-                'end_time' => $endTime->format('H:i:s'),
                 'location' => $data['location'],
                 'client_address' => $data['location'] === 'home' ? ($data['client_address'] ?? null) : null,
                 'latitude' => $data['location'] === 'home' ? ($data['latitude'] ?? null) : null,
