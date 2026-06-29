@@ -33,8 +33,7 @@ class BookingController extends Controller
         private CurrencyConversionService $currencyConversionService,
         private BookingPaymentService $bookingPaymentService,
         private BookingCommissionService $bookingCommissionService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -119,7 +118,7 @@ class BookingController extends Controller
             ->with([
                 'professionel',
                 'currency',
-                'servicePrices' => fn ($query) => $query->where('is_approved', true),
+                'servicePrices' => fn($query) => $query->where('is_approved', true),
                 'servicePrices.service.currency',
             ])
             ->findOrFail($data['service_id']);

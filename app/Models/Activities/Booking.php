@@ -20,8 +20,8 @@ class Booking extends Model
         return [
             'booking_details' => 'array',
             'booking_date' => 'date',
-            'start_time' => 'time',
-            'end_time' => 'time',
+            'start_time' => 'string',
+            'end_time' => 'string',
             'service_to_client_exchange_rate' => 'decimal:8',
             'service_subtotal_amount' => 'decimal:2',
             'service_total_amount' => 'decimal:2',
