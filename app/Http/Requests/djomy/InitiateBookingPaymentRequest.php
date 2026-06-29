@@ -33,7 +33,7 @@ class InitiateBookingPaymentRequest extends FormRequest
             'returnUrl' => ['nullable', 'url'],
             'cancelUrl' => ['nullable', 'url'],
             'metadata' => ['nullable', 'array'],
-            'metadata.*' => ['scalar'],
+            // 'metadata.*' => ['scalar'],
         ];
     }
 

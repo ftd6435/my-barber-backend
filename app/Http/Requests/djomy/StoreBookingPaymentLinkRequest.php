@@ -43,7 +43,7 @@ class StoreBookingPaymentLinkRequest extends FormRequest
             'customFields.*.placeholder' => ['nullable', 'string'],
             'customFields.*.required' => ['nullable', 'boolean'],
             'metadata' => ['nullable', 'array'],
-            'metadata.*' => ['scalar'],
+            // 'metadata.*' => ['scalar'],
         ];
     }
 

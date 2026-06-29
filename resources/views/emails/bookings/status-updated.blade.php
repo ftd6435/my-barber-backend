@@ -21,7 +21,7 @@
                     <p style="margin:0 0 8px;font-size:14px;"><strong>Service :</strong> {{ $booking->service?->name ?? 'Non renseigné' }}</p>
                     <p style="margin:0 0 8px;font-size:14px;"><strong>Statut :</strong> {{ ucfirst($action) }}</p>
                     <p style="margin:0 0 8px;font-size:14px;"><strong>Date :</strong> {{ $booking->booking_date?->format('d/m/Y') }}</p>
-                    <p style="margin:0 0 8px;font-size:14px;"><strong>Heure :</strong> {{ $booking->start_time?->format('H:i') }}</p>
+                    <p style="margin:0 0 8px;font-size:14px;"><strong>Heure :</strong> {{ $booking->start_time }}</p>
                     @if ($booking->professionel_comment)
                         <p style="margin:0 0 8px;font-size:14px;"><strong>Commentaire professionnel :</strong> {{ $booking->professionel_comment }}</p>
                     @endif

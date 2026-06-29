@@ -77,7 +77,7 @@ class PaymentController extends Controller
             );
         }
 
-        $reference = $booking->reference . '-PAY-' . strtoupper(Str::random(8));
+        $reference = $booking->reference . '-PAY-' . strtoupper(Str::random(4));
         $metadata = array_merge(
             $validated['metadata'] ?? [],
             [

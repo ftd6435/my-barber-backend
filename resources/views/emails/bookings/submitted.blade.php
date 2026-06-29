@@ -22,7 +22,7 @@
                     <p style="margin:0 0 8px;font-size:14px;"><strong>Service :</strong> {{ $booking->service?->name ?? 'Non renseigné' }}</p>
                     <p style="margin:0 0 8px;font-size:14px;"><strong>Client :</strong> {{ $booking->client?->first_name }} {{ $booking->client?->last_name }}</p>
                     <p style="margin:0 0 8px;font-size:14px;"><strong>Date :</strong> {{ $booking->booking_date?->format('d/m/Y') }}</p>
-                    <p style="margin:0;font-size:14px;"><strong>Heure :</strong> {{ $booking->start_time?->format('H:i') }}</p>
+                    <p style="margin:0;font-size:14px;"><strong>Heure :</strong> {{ $booking->start_time }}</p>
                 </div>
 
                 <p style="margin:0;font-size:14px;line-height:1.6;color:#333335;">
