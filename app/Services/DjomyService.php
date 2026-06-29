@@ -54,7 +54,7 @@ class DjomyService
      */
     public function getAccessToken(): string
     {
-        return Cache::remember('djomy_access_token', 3300, function () {
+        return Cache::remember('djomy_access_token', 3300, function (): string {
             $response = Http::withHeaders([
                 'X-API-KEY'    => $this->getXApiKey(),
                 'Content-Type' => 'application/json',
@@ -64,9 +64,21 @@ class DjomyService
                 'clientSecret' => $this->clientSecret,
             ]);
 
-            $this->throwIfFailed($response, 'Échec de l\'authentification');
+            $payload = $this->extractResponseData($response, 'Échec de l\'authentification');
+            $token = is_array($payload)
+                ? (
+                    $payload['access_token']
+                    ?? $payload['token']
+                    ?? $payload['accessToken']
+                    ?? null
+                )
+                : $payload;
 
-            return $response->json('access_token');
+            if (!is_string($token) || trim($token) === '') {
+                throw new Exception('[Djomy] Échec de l\'authentification: access token introuvable dans la réponse.');
+            }
+
+            return $token;
         });
     }
 
@@ -136,9 +148,8 @@ class DjomyService
         $payload = array_filter($payload, fn($v) => $v !== null);
 
         $response = $this->client()->post('/v1/payments', $payload);
-        $this->throwIfFailed($response, 'Échec de l\'initialisation du paiement');
 
-        return $response->json();
+        return $this->extractArrayResponseData($response, 'Échec de l\'initialisation du paiement');
     }
 
     /**
@@ -147,9 +158,8 @@ class DjomyService
     public function getPayment(string $transactionReference): array
     {
         $response = $this->client()->get("/v1/payments/{$transactionReference}");
-        $this->throwIfFailed($response, 'Échec de la récupération du statut du paiement');
 
-        return $response->json();
+        return $this->extractArrayResponseData($response, 'Échec de la récupération du statut du paiement');
     }
 
     // ----------------------------------------------------------------
@@ -203,9 +213,8 @@ class DjomyService
         $payload['sendSms'] = $data['sendSms'] ?? false;
 
         $response = $this->client()->post('/v1/links', $payload);
-        $this->throwIfFailed($response, 'Échec de la création du lien de paiement');
 
-        return $response->json();
+        return $this->extractArrayResponseData($response, 'Échec de la création du lien de paiement');
     }
 
     /**
@@ -215,9 +224,8 @@ class DjomyService
     public function getPaymentLink(string $reference): array
     {
         $response = $this->client()->get("/v1/links/{$reference}");
-        $this->throwIfFailed($response, 'Échec de la récupération du lien de paiement');
 
-        return $response->json();
+        return $this->extractArrayResponseData($response, 'Échec de la récupération du lien de paiement');
     }
 
     /**
@@ -243,9 +251,8 @@ class DjomyService
         ], fn($v) => $v !== null);
 
         $response = $this->client()->get('/v1/links', $query);
-        $this->throwIfFailed($response, 'Échec de la récupération des liens de paiement');
 
-        return $response->json();
+        return $this->extractArrayResponseData($response, 'Échec de la récupération des liens de paiement');
     }
 
     // ----------------------------------------------------------------
@@ -262,5 +269,38 @@ class DjomyService
 
             throw new Exception("[Djomy] {$context}: {$message} (HTTP {$response->status()})");
         }
+
+        $body = $response->json();
+
+        if (is_array($body) && array_key_exists('success', $body) && $body['success'] === false) {
+            $message = $body['message'] ?? $body['error'] ?? $body['errors'] ?? json_encode($body);
+            $message = is_array($message) ? json_encode($message) : (string) $message;
+
+            throw new Exception("[Djomy] {$context}: {$message} (HTTP {$response->status()})");
+        }
+    }
+
+    private function extractResponseData(Response $response, string $context): mixed
+    {
+        $this->throwIfFailed($response, $context);
+
+        $body = $response->json();
+
+        if (!is_array($body)) {
+            throw new Exception("[Djomy] {$context}: réponse JSON invalide.");
+        }
+
+        return array_key_exists('data', $body) ? $body['data'] : $body;
+    }
+
+    private function extractArrayResponseData(Response $response, string $context): array
+    {
+        $data = $this->extractResponseData($response, $context);
+
+        if (!is_array($data)) {
+            throw new Exception("[Djomy] {$context}: la clé data ne contient pas un objet exploitable.");
+        }
+
+        return $data;
     }
 }
