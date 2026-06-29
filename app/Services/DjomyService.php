@@ -127,9 +127,12 @@ class DjomyService
             );
         }
 
+        $isGn = \Illuminate\Support\Str::upper($data['countryCode'] ?? 'GN') === strtoupper('GN');
+        $number = $isGn ? '00224' . $data['payerIdentifier'] : $data['payerIdentifier'];
+
         $payload = [
             'paymentMethod'           => $data['paymentMethod'],
-            'payerIdentifier'         => $data['payerIdentifier'],
+            'payerIdentifier'         => $number,
             'amount'                  => $data['amount'],
             'countryCode'             => $data['countryCode'] ?? 'GN',
             'description'             => $data['description'] ?? null,
