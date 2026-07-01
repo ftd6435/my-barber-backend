@@ -56,7 +56,7 @@ class DjomyService
     public function getAccessToken(): string
     {
         return Cache::remember('djomy_access_token', 3300, function (): string {
-            Log::info('[Djomy] Requesting access token', [
+            $this->logInfo('[Djomy] Requesting access token', [
                 'base_url' => $this->baseUrl,
                 'client_id' => $this->maskValue($this->clientId),
             ]);
@@ -84,7 +84,7 @@ class DjomyService
                 throw new Exception('[Djomy] Échec de l\'authentification: access token introuvable dans la réponse.');
             }
 
-            Log::info('[Djomy] Access token received successfully');
+            $this->logInfo('[Djomy] Access token received successfully');
 
             return $token;
         });
@@ -158,7 +158,7 @@ class DjomyService
         // Remove null values to keep the payload clean
         $payload = array_filter($payload, fn($v) => $v !== null);
 
-        Log::info('[Djomy] Initiating direct payment', [
+        $this->logInfo('[Djomy] Initiating direct payment', [
             'endpoint' => '/v1/payments',
             'payment_method' => $payload['paymentMethod'] ?? null,
             'merchant_reference' => $payload['merchantPaymentReference'] ?? null,
@@ -171,7 +171,7 @@ class DjomyService
 
         $result = $this->extractArrayResponseData($response, 'Échec de l\'initialisation du paiement');
 
-        Log::info('[Djomy] Direct payment initiated', [
+        $this->logInfo('[Djomy] Direct payment initiated', [
             'merchant_reference' => $payload['merchantPaymentReference'] ?? null,
             'transaction_id' => $result['transactionId'] ?? null,
             'status' => $result['status'] ?? null,
@@ -187,7 +187,7 @@ class DjomyService
     {
         $endpoint = '/v1/payments/' . rawurlencode($transactionReference) . '/status';
 
-        Log::info('[Djomy] Fetching direct payment status', [
+        $this->logInfo('[Djomy] Fetching direct payment status', [
             'endpoint' => $endpoint,
             'transaction_reference' => $transactionReference,
         ]);
@@ -196,7 +196,7 @@ class DjomyService
 
         $result = $this->extractArrayResponseData($response, 'Échec de la récupération du statut du paiement');
 
-        Log::info('[Djomy] Direct payment status fetched', [
+        $this->logInfo('[Djomy] Direct payment status fetched', [
             'transaction_reference' => $transactionReference,
             'status' => $result['status'] ?? null,
             'merchant_reference' => $result['merchantPaymentReference'] ?? $result['merchantReference'] ?? null,
@@ -255,7 +255,7 @@ class DjomyService
         // Preserve explicit false for sendSms
         $payload['sendSms'] = $data['sendSms'] ?? false;
 
-        Log::info('[Djomy] Creating payment link', [
+        $this->logInfo('[Djomy] Creating payment link', [
             'endpoint' => '/v1/links',
             'merchant_reference' => $payload['merchantReference'] ?? null,
             'country_code' => $payload['countryCode'] ?? null,
@@ -269,7 +269,7 @@ class DjomyService
 
         $result = $this->extractArrayResponseData($response, 'Échec de la création du lien de paiement');
 
-        Log::info('[Djomy] Payment link created', [
+        $this->logInfo('[Djomy] Payment link created', [
             'merchant_reference' => $payload['merchantReference'] ?? null,
             'reference' => $result['reference'] ?? $result['paymentLinkReference'] ?? null,
             'status' => $result['status'] ?? null,
@@ -286,7 +286,7 @@ class DjomyService
     {
         $endpoint = '/v1/links/' . rawurlencode($reference);
 
-        Log::info('[Djomy] Fetching payment link', [
+        $this->logInfo('[Djomy] Fetching payment link', [
             'endpoint' => $endpoint,
             'reference' => $reference,
         ]);
@@ -295,7 +295,7 @@ class DjomyService
 
         $result = $this->extractArrayResponseData($response, 'Échec de la récupération du lien de paiement');
 
-        Log::info('[Djomy] Payment link fetched', [
+        $this->logInfo('[Djomy] Payment link fetched', [
             'reference' => $reference,
             'status' => $result['status'] ?? null,
         ]);
@@ -325,7 +325,7 @@ class DjomyService
             'endDate'   => $params['endDate'] ?? null,
         ], fn($v) => $v !== null);
 
-        Log::info('[Djomy] Listing payment links', [
+        $this->logInfo('[Djomy] Listing payment links', [
             'endpoint' => '/v1/links',
             'query' => $query,
         ]);
@@ -334,7 +334,7 @@ class DjomyService
 
         $result = $this->extractArrayResponseData($response, 'Échec de la récupération des liens de paiement');
 
-        Log::info('[Djomy] Payment links listed successfully');
+        $this->logInfo('[Djomy] Payment links listed successfully');
 
         return $result;
     }
@@ -351,7 +351,7 @@ class DjomyService
                 ? ($body['message'] ?? $body['error'] ?? json_encode($body))
                 : $body;
 
-            Log::info('[Djomy] Request failed', [
+            $this->logInfo('[Djomy] Request failed', [
                 'context' => $context,
                 'http_status' => $response->status(),
                 'response_body' => is_string($body) ? $body : json_encode($body),
@@ -366,7 +366,7 @@ class DjomyService
             $message = $body['message'] ?? $body['error'] ?? $body['errors'] ?? json_encode($body);
             $message = is_array($message) ? json_encode($message) : (string) $message;
 
-            Log::info('[Djomy] Request returned unsuccessful payload', [
+            $this->logInfo('[Djomy] Request returned unsuccessful payload', [
                 'context' => $context,
                 'http_status' => $response->status(),
                 'response_body' => json_encode($body),
@@ -414,5 +414,14 @@ class DjomyService
         }
 
         return substr($string, 0, 2) . str_repeat('*', max(0, $length - 4)) . substr($string, -2);
+    }
+
+    private function logInfo(string $message, array $context = []): void
+    {
+        Log::info($message, $context);
+
+        if (config('logging.default') !== 'single') {
+            Log::channel('single')->info($message, $context);
+        }
     }
 }
