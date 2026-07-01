@@ -225,6 +225,7 @@ Route::middleware('auth:sanctum')->prefix('v1/payment-links')->group(function ()
     Route::post('/', [PaymentLinkController::class, 'create']);
     Route::get('/', [PaymentLinkController::class, 'index']);
     Route::get('/{reference}', [PaymentLinkController::class, 'show']);
+    Route::post('/{reference}/confirm-otp', [PaymentController::class, 'confirmOtp']);
 });
 
 // Webhook — receives async payment status updates from Djomy

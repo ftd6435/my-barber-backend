@@ -91,6 +91,33 @@ class DjomyService
     }
 
     /**
+     * Confirm a payment with the OTP received by the payer.
+     * POST /v1/payments/{transactionReference}/confirmOTP
+     */
+    public function confirmOtp(string $transactionReference, string $oneTimePin): array
+    {
+        $endpoint = '/v1/payments/' . rawurlencode($transactionReference) . '/confirmOTP';
+
+        $this->logInfo('[Djomy] Confirming OTP', [
+            'endpoint' => $endpoint,
+            'transaction_reference' => $transactionReference,
+        ]);
+
+        $response = $this->client()->post($endpoint, [
+            'oneTimePin' => $oneTimePin,
+        ]);
+
+        $result = $this->extractArrayResponseData($response, 'Échec de la confirmation OTP');
+
+        $this->logInfo('[Djomy] OTP confirmed', [
+            'transaction_reference' => $transactionReference,
+            'status' => $result['status'] ?? null,
+        ]);
+
+        return $result;
+    }
+
+    /**
      * Base HTTP client with both required headers:
      *   - Authorization: Bearer <jwt_token>
      *   - X-API-KEY: clientId:hmac_signature

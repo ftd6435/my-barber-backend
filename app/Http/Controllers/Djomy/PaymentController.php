@@ -179,6 +179,47 @@ class PaymentController extends Controller
     }
 
     /**
+     * POST /api/payments/{reference}/confirm-otp
+     * Confirm a pending direct payment with the OTP the payer received.
+     */
+    public function confirmOtp(Request $request, string $reference): JsonResponse
+    {
+        $request->validate([
+            'oneTimePin' => ['required', 'string', 'regex:/^\d{4,6}$/'],
+        ]);
+
+        $payment = DjomyPayment::query()->where('merchant_reference', $reference)->firstOrFail();
+
+        if ($payment->booking && !$this->permissionService->canViewBooking($request->user(), $payment->booking)) {
+            return $this->errorResponse('Paiement introuvable.', ['payment' => 'Ce paiement n\'est pas disponible.'], 404);
+        }
+
+        if (!$payment->djomy_transaction_id) {
+            return $this->errorResponse('Transaction Djomy introuvable.', ['status' => $payment->status], 404);
+        }
+
+        try {
+            $result = $this->djomy->confirmOtp($payment->djomy_transaction_id, $request->input('oneTimePin'));
+
+            $payment->update([
+                'status'         => strtoupper($result['status'] ?? $payment->status),
+                'djomy_response' => $result,
+            ]);
+
+            if ($payment->fresh()->isSuccessful()) {
+                $this->bookingPaymentService->applySuccessfulDirectPayment($payment->fresh());
+            }
+
+            return $this->successResponse(
+                ['reference' => $reference, 'status' => $payment->fresh()->status, 'payment' => $result],
+                'OTP confirmé avec succès.'
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse('Échec de la confirmation OTP.', ['payment' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
      * GET /api/payments/{reference}/status
      * Check the status of a payment by your internal merchant reference.
      */
