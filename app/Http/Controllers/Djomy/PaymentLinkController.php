@@ -26,7 +26,7 @@ class PaymentLinkController extends Controller
     ) {}
 
     /**
-     * POST /api/payment-links
+     * POST /api/v1/payment-links
      * Create a new Djomy payment link (supports all methods including CARD).
      */
     public function create(StoreBookingPaymentLinkRequest $request): JsonResponse
@@ -36,7 +36,7 @@ class PaymentLinkController extends Controller
         }
 
         $validated = $request->validated();
-        $booking = Booking::query()->with('bookingPrices')->findOrFail($request->integer('booking_id'));
+        $booking = Booking::with('bookingPrices')->findOrFail($request->integer('booking_id'));
 
         if (!$this->permissionService->canManageBookingAsClient($request->user(), $booking)) {
             return $this->errorResponse(
@@ -57,24 +57,6 @@ class PaymentLinkController extends Controller
         $booking = $this->bookingPaymentService->syncBookingPaymentStatus($booking);
         $remainingAmount = $this->bookingPaymentService->calculateRemainingAmount($booking);
         $amountToPay = round((float) $validated['amountToPay'], 2);
-
-        // MULTIPLE usage requires usageLimit
-        if (($validated['usageType'] ?? 'UNIQUE') === 'MULTIPLE' && empty($validated['usageLimit'])) {
-            return $this->errorResponse(
-                'Validation impossible.',
-                ['usageLimit' => 'La limite d\'utilisation est obligatoire lorsque le type d\'utilisation est MULTIPLE.'],
-                422
-            );
-        }
-
-        // sendSms requires phoneNumber
-        if (!empty($validated['sendSms']) && empty($validated['phoneNumber'])) {
-            return $this->errorResponse(
-                'Validation impossible.',
-                ['phoneNumber' => 'Le numéro de téléphone est obligatoire lorsque l\'envoi par SMS est activé.'],
-                422
-            );
-        }
 
         if ($remainingAmount <= 0) {
             return $this->errorResponse(
@@ -106,30 +88,47 @@ class PaymentLinkController extends Controller
 
         try {
             $result = $this->djomy->createPaymentLink([
-                ...$validated,
+                'countryCode' => $validated['countryCode'],
                 'amountToPay' => $amountToPay,
+                'linkName' => $validated['linkName'] ?? ('Paiement réservation ' . $booking->reference),
+                'phoneNumber' => $validated['phoneNumber'] ?? null,
+                'sendSms' => $validated['sendSms'] ?? false,
+                'description' => $validated['description'] ?? null,
+                'usageType' => $validated['usageType'] ?? 'UNIQUE',
+                'usageLimit' => $validated['usageLimit'] ?? null,
+                'expiresAt' => $validated['expiresAt'] ?? null,
                 'merchantReference' => $merchantReference,
+                'returnUrl' => $validated['returnUrl'] ?? null,
+                'cancelUrl' => $validated['cancelUrl'] ?? null,
+                'allowedPaymentMethods' => $validated['allowedPaymentMethods'] ?? null,
+                'customFields' => $validated['customFields'] ?? null,
                 'metadata' => $metadata,
             ]);
 
+            // Get the Djomy reference and URL from response
+            $djomyReference = $result['reference'] ?? $result['id'] ?? null;
+            $linkUrl = $result['url'] ?? $result['paymentLink'] ?? $result['paymentUrl'] ?? null;
+
             // Persist the link locally
             $link = DjomyPaymentLink::create([
-                'booking_id'             => $booking->id,
-                'currency_id'            => $booking->client_currency_id,
-                'djomy_reference'        => $result['reference'] ?? $result['id'] ?? null,
-                'merchant_reference'     => $merchantReference,
-                'link_name'              => $validated['linkName'] ?? ('Paiement réservation ' . $booking->reference),
-                'link_url'               => $result['url'] ?? $result['paymentLink'] ?? null,
-                'amount_to_pay'          => $amountToPay,
-                'country_code'           => $validated['countryCode'],
-                'usage_type'             => $validated['usageType'] ?? 'UNIQUE',
-                'usage_limit'            => $validated['usageLimit'] ?? null,
-                'expires_at'             => $validated['expiresAt'] ?? null,
-                'description'            => $validated['description'] ?? null,
+                'booking_id' => $booking->id,
+                'currency_id' => $booking->client_currency_id,
+                'djomy_reference' => $djomyReference,
+                'merchant_reference' => $merchantReference,
+                'link_name' => $validated['linkName'] ?? ('Paiement réservation ' . $booking->reference),
+                'link_url' => $linkUrl,
+                'amount_to_pay' => $amountToPay,
+                'paid_amount' => 0,
+                'country_code' => $validated['countryCode'],
+                'usage_type' => $validated['usageType'] ?? 'UNIQUE',
+                'usage_limit' => $validated['usageLimit'] ?? null,
+                'status' => 'ACTIVE',
+                'is_wallet_applied' => false,
+                'expires_at' => $validated['expiresAt'] ?? null,
+                'description' => $validated['description'] ?? null,
                 'allowed_payment_methods' => $validated['allowedPaymentMethods'] ?? null,
-                'metadata'               => $metadata,
-                'djomy_response'         => $result,
-                'status'                 => 'ACTIVE',
+                'djomy_response' => $result,
+                'metadata' => $metadata,
             ]);
 
             return $this->successResponse(
@@ -152,12 +151,12 @@ class PaymentLinkController extends Controller
     }
 
     /**
-     * GET /api/payment-links/{reference}
+     * GET /api/v1/payment-links/{reference}
      * Retrieve a payment link by Djomy reference.
      */
     public function show(Request $request, string $reference): JsonResponse
     {
-        $link = DjomyPaymentLink::query()->with('booking')->where('djomy_reference', $reference)->firstOrFail();
+        $link = DjomyPaymentLink::with('booking')->where('djomy_reference', $reference)->firstOrFail();
 
         if ($link->booking && !$this->permissionService->canViewBooking($request->user(), $link->booking)) {
             return $this->errorResponse(
@@ -171,13 +170,20 @@ class PaymentLinkController extends Controller
             $result = $this->djomy->getPaymentLink($reference);
 
             // Sync local record
-            $link->update([
-                'status'         => strtoupper($result['status'] ?? 'ACTIVE'),
-                'paid_amount' => isset($result['paidAmount']) ? round((float) $result['paidAmount'], 2) : $link->paid_amount,
+            $updateData = [
+                'status' => strtoupper($result['status'] ?? 'ACTIVE'),
                 'djomy_response' => $result,
-            ]);
+            ];
 
-            if (strtoupper($link->status) === 'SUCCESS') {
+            // Update paid amount if available
+            if (isset($result['paidAmount'])) {
+                $updateData['paid_amount'] = round((float) $result['paidAmount'], 2);
+            }
+
+            $link->update($updateData);
+
+            // If payment link is successful, apply the payment
+            if (strtoupper($link->status) === 'SUCCESS' && $link->booking) {
                 $this->bookingPaymentService->applySuccessfulPaymentLink($link->fresh());
             }
 
@@ -195,7 +201,7 @@ class PaymentLinkController extends Controller
     }
 
     /**
-     * GET /api/payment-links
+     * GET /api/v1/payment-links
      * List all payment links (paginated).
      */
     public function index(ListPaymentLinksRequest $request): JsonResponse

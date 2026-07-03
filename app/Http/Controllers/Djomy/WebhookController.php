@@ -8,6 +8,7 @@ use App\Models\Djomy\DjomyPayment;
 use App\Models\Djomy\DjomyPaymentLink;
 use App\Services\BookingPaymentService;
 use App\Traits\ApiResponses;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -20,46 +21,37 @@ class WebhookController extends Controller
     ) {}
 
     /**
-     * POST /api/webhooks/djomy
+     * POST /api/v1/webhooks/djomy
      *
      * Djomy sends async notifications when payment status changes.
      * The webhook uses the same X-API-KEY header format:
-     *   X-API-KEY: clientId:HMAC_SHA256(clientId, clientSecret)
+     * X-API-KEY: clientId:HMAC_SHA256(clientId, clientSecret)
      */
-    public function handle(Request $request)
+    public function handle(Request $request): JsonResponse
     {
         // 1. Verify the X-API-KEY signature from Djomy
         if (!$this->verifySignature($request)) {
-            Log::warning('[Djomy Webhook] Invalid signature', [
-                'ip'      => $request->ip(),
+            Log::warning('Invalid Djomy webhook signature', [
+                'ip' => $request->ip(),
                 'headers' => $request->headers->all(),
             ]);
-            return $this->errorResponse(
-                'Non autorisé.',
-                ['webhook' => 'Signature Djomy invalide.'],
-                401
-            );
+            return $this->errorResponse('Non autorisé.', ['webhook' => 'Signature invalide.'], 401);
         }
 
         $payload = $request->json()->all();
 
-        Log::info('[Djomy Webhook] Received', ['payload' => $payload]);
+        Log::info('Djomy webhook received', ['event_type' => $payload['eventType'] ?? 'unknown']);
 
         // 2. Route the event by type
         $eventType = $payload['eventType'] ?? $payload['type'] ?? null;
 
-        match (true) {
-            str_contains((string) $eventType, 'PAYMENT') => $this->handlePaymentEvent($payload),
-            str_contains((string) $eventType, 'LINK')    => $this->handleLinkEvent($payload),
-            default => Log::info('[Djomy Webhook] Unknown event type', ['type' => $eventType]),
-        };
+        if ($eventType && str_contains((string) $eventType, 'payment')) {
+            $this->handlePaymentEvent($payload);
+        } elseif ($eventType && str_contains((string) $eventType, 'link')) {
+            $this->handleLinkEvent($payload);
+        }
 
-        // Always return 200 immediately — process asynchronously in production
-        return $this->successResponse(
-            ['received' => true],
-            'Webhook Djomy reçu avec succès.',
-            200
-        );
+        return $this->successResponse(['received' => true], 'Webhook reçu.', 200);
     }
 
     // ----------------------------------------------------------------
@@ -68,133 +60,88 @@ class WebhookController extends Controller
 
     private function handlePaymentEvent(array $payload): void
     {
-        $status    = strtoupper($payload['status'] ?? '');
+        $status = strtoupper($payload['status'] ?? '');
         $reference = $payload['merchantPaymentReference'] ?? $payload['merchantReference'] ?? null;
-        $txId      = $payload['transactionId'] ?? null;
-        $amount    = isset($payload['amount']) ? (float) $payload['amount'] : null;
+        $txId = $payload['transactionId'] ?? null;
 
         if (!$reference && !$txId) {
-            Log::warning('[Djomy Webhook] Payment event missing reference', $payload);
+            Log::warning('Payment event missing reference', $payload);
             return;
         }
 
+        // Try to find by merchant reference first
         $payment = $reference
             ? DjomyPayment::where('merchant_reference', $reference)->first()
-            : DjomyPayment::where('djomy_transaction_id', $txId)->first();
+            : null;
+
+        // Then try by transaction ID
+        if (!$payment && $txId) {
+            $payment = DjomyPayment::where('djomy_transaction_id', $txId)->first();
+        }
 
         if ($payment) {
             $payment->update([
-                'status'               => $status,
+                'status' => $status,
                 'djomy_transaction_id' => $txId ?? $payment->djomy_transaction_id,
-                'djomy_response'       => $payload,
+                'djomy_response' => $payload,
             ]);
 
-            match ($status) {
-                'SUCCESS' => $this->onPaymentSuccess(
-                    $payment->booking,
-                    $payment->merchant_reference,
-                    (float) $payment->amount,
-                    $payment->payment_method
-                ),
-                'FAILED'  => $this->onPaymentFailed(
-                    $payment->booking,
-                    $payment->merchant_reference,
-                    $payload['failureReason'] ?? 'Inconnue'
-                ),
-                default   => null,
-            };
+            if ($status === 'SUCCESS') {
+                $this->bookingPaymentService->applySuccessfulDirectPayment($payment->fresh());
+            }
 
+            Log::info('Payment updated via webhook', [
+                'reference' => $payment->merchant_reference,
+                'status' => $status
+            ]);
             return;
         }
 
+        // If not a payment, check if it's a payment link
         $paymentLink = $reference
-            ? DjomyPaymentLink::where('merchant_reference', $reference)->first()
+            ? DjomyPaymentLink::where('merchant_reference', $reference)
+            ->orWhere('djomy_reference', $reference)
+            ->first()
             : null;
 
-        if (!$paymentLink) {
-            Log::warning('[Djomy Webhook] Payment not found', compact('reference', 'txId'));
-            return;
+        if ($paymentLink) {
+            $paymentLink->update([
+                'status' => $status,
+                'djomy_response' => $payload,
+            ]);
+
+            if ($status === 'SUCCESS' && $paymentLink->booking) {
+                $this->bookingPaymentService->applySuccessfulPaymentLink($paymentLink->fresh());
+            }
+
+            Log::info('Payment link updated via webhook', [
+                'reference' => $paymentLink->djomy_reference,
+                'status' => $status
+            ]);
+        } else {
+            Log::warning('Payment not found for webhook', compact('reference', 'txId'));
         }
-
-        $paymentLink->update([
-            'status' => $status,
-            'paid_amount' => $status === 'SUCCESS'
-                ? round((float) ($amount ?? $paymentLink->amount_to_pay ?? 0), 2)
-                : $paymentLink->paid_amount,
-            'djomy_response'       => $payload,
-        ]);
-
-        match ($status) {
-            'SUCCESS' => $this->onPaymentSuccess(
-                $paymentLink->booking,
-                $paymentLink->merchant_reference ?? $paymentLink->djomy_reference,
-                (float) ($paymentLink->paid_amount ?? 0),
-                'PAYMENT_LINK'
-            ),
-            'FAILED'  => $this->onPaymentFailed(
-                $paymentLink->booking,
-                $paymentLink->merchant_reference ?? $paymentLink->djomy_reference,
-                $payload['failureReason'] ?? 'Inconnue'
-            ),
-            default   => null,
-        };
     }
 
     private function handleLinkEvent(array $payload): void
     {
         $reference = $payload['reference'] ?? null;
-        if (!$reference) return;
-
-        DjomyPaymentLink::where('djomy_reference', $reference)->update([
-            'status'         => strtoupper($payload['status'] ?? 'ACTIVE'),
-            'djomy_response' => $payload,
-        ]);
-    }
-
-    /**
-     * Called when a payment succeeds.
-     * 👉 Dispatch your own events or jobs here.
-     * Example: event(new PaymentSucceeded($payment));
-     */
-    private function onPaymentSuccess(?Booking $booking, string $reference, float $amount, ?string $method = null): void
-    {
-        $paymentStatus = null;
-
-        if ($booking) {
-            $payment = DjomyPayment::query()->where('merchant_reference', $reference)->first();
-            $paymentLink = !$payment
-                ? DjomyPaymentLink::query()->where('merchant_reference', $reference)->orWhere('djomy_reference', $reference)->first()
-                : null;
-
-            if ($payment) {
-                $this->bookingPaymentService->applySuccessfulDirectPayment($payment);
-            } elseif ($paymentLink) {
-                $this->bookingPaymentService->applySuccessfulPaymentLink($paymentLink);
-            }
-
-            $booking = $this->bookingPaymentService->syncBookingPaymentStatus($booking->fresh());
-            $paymentStatus = $booking->payment_status;
+        if (!$reference) {
+            return;
         }
 
-        Log::info('[Djomy] Payment succeeded', [
-            'reference' => $reference,
-            'amount'    => $amount,
-            'method'    => $method,
-            'booking_id' => $booking?->id,
-            'booking_payment_status' => $paymentStatus,
-        ]);
-    }
+        $link = DjomyPaymentLink::where('djomy_reference', $reference)->first();
+        if ($link) {
+            $link->update([
+                'status' => strtoupper($payload['status'] ?? 'ACTIVE'),
+                'djomy_response' => $payload,
+            ]);
 
-    /**
-     * Called when a payment fails.
-     */
-    private function onPaymentFailed(?Booking $booking, string $reference, string $reason): void
-    {
-        Log::warning('[Djomy] Payment failed', [
-            'reference' => $reference,
-            'reason'    => $reason,
-            'booking_id' => $booking?->id,
-        ]);
+            Log::info('Payment link event processed', [
+                'reference' => $reference,
+                'status' => $payload['status'] ?? 'ACTIVE'
+            ]);
+        }
     }
 
     // ----------------------------------------------------------------
@@ -204,12 +151,14 @@ class WebhookController extends Controller
     private function verifySignature(Request $request): bool
     {
         $receivedKey = $request->header('X-API-KEY');
-        if (!$receivedKey) return false;
+        if (!$receivedKey) {
+            return false;
+        }
 
-        $clientId     = config('services.djomy.client_id');
+        $clientId = config('services.djomy.client_id');
         $clientSecret = config('services.djomy.client_secret');
-        $signature    = hash_hmac('sha256', $clientId, $clientSecret);
-        $expected     = "{$clientId}:{$signature}";
+        $signature = hash_hmac('sha256', $clientId, $clientSecret);
+        $expected = "{$clientId}:{$signature}";
 
         return hash_equals($expected, $receivedKey);
     }

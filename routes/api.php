@@ -218,6 +218,7 @@ Route::prefix('v1/booking-reviews')->group(function () {
 Route::middleware('auth:sanctum')->prefix('v1/payments')->group(function () {
     Route::post('/initiate', [PaymentController::class, 'initiate']);
     Route::get('/{reference}/status', [PaymentController::class, 'status']);
+    Route::post('/{reference}/confirm-otp', [PaymentController::class, 'confirmOtp']);
 });
 
 // Payment links (all methods including CARD/VISA/MASTERCARD)
@@ -225,13 +226,9 @@ Route::middleware('auth:sanctum')->prefix('v1/payment-links')->group(function ()
     Route::post('/', [PaymentLinkController::class, 'create']);
     Route::get('/', [PaymentLinkController::class, 'index']);
     Route::get('/{reference}', [PaymentLinkController::class, 'show']);
-    Route::post('/{reference}/confirm-otp', [PaymentController::class, 'confirmOtp']);
 });
 
-// Webhook — receives async payment status updates from Djomy
-// ⚠️ Register your public URL in the Djomy merchant dashboard
-// ⚠️ Exclude from CSRF in App\Http\Middleware\VerifyCsrfToken:
-//    protected $except = ['api/webhooks/djomy'];
+// Webhook (public - no auth)
 Route::post('v1/webhooks/djomy', [WebhookController::class, 'handle'])
-    ->withoutMiddleware(['auth', 'throttle']) // Djomy must reach this freely
+    ->withoutMiddleware(['auth:sanctum', 'throttle'])
     ->name('djomy.webhook');

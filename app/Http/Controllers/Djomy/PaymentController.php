@@ -13,7 +13,6 @@ use App\Traits\ApiResponses;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
@@ -26,7 +25,7 @@ class PaymentController extends Controller
     ) {}
 
     /**
-     * POST /api/payments/initiate
+     * POST /api/v1/payments/initiate
      * Initiate a direct payment (OM, MOMO, KULU, YMO, SOUTRA_MONEY, PAYCARD).
      * ⚠️ CARD/VISA/MASTERCARD must use the payment link endpoint instead.
      */
@@ -37,7 +36,7 @@ class PaymentController extends Controller
         }
 
         $validated = $request->validated();
-        $booking = Booking::query()->with('bookingPrices')->findOrFail($request->integer('booking_id'));
+        $booking = Booking::with('bookingPrices')->findOrFail($request->integer('booking_id'));
 
         if (!$this->permissionService->canManageBookingAsClient($request->user(), $booking)) {
             return $this->errorResponse(
@@ -88,49 +87,39 @@ class PaymentController extends Controller
         );
 
         $payment = DjomyPayment::create([
-            'booking_id'          => $booking->id,
-            'currency_id'         => $booking->client_currency_id,
-            'merchant_reference' => $reference,
-            'payment_method'     => $validated['paymentMethod'],
-            'payer_identifier'   => $validated['payerIdentifier'],
-            'amount'             => $amount,
-            'country_code'       => $validated['countryCode'] ?? 'GN',
-            'description'        => $validated['description'] ?? null,
-            'metadata'           => $metadata,
-            'status'             => 'PENDING',
-        ]);
-
-        $this->logInfo('[Djomy PaymentController] Initiating booking payment', [
             'booking_id' => $booking->id,
-            'booking_reference' => $booking->reference,
+            'currency_id' => $booking->client_currency_id,
             'merchant_reference' => $reference,
-            'payment_id' => $payment->id,
             'payment_method' => $validated['paymentMethod'],
+            'payer_identifier' => $validated['payerIdentifier'],
             'amount' => $amount,
+            'country_code' => $validated['countryCode'] ?? 'GN',
+            'description' => $validated['description'] ?? null,
+            'metadata' => $metadata,
+            'status' => 'PENDING',
         ]);
 
         try {
             $result = $this->djomy->initiatePayment([
-                ...$validated,
+                'paymentMethod' => $validated['paymentMethod'],
+                'payerIdentifier' => $validated['payerIdentifier'],
                 'amount' => $amount,
-                'metadata' => $metadata,
+                'countryCode' => $validated['countryCode'] ?? 'GN',
+                'description' => $validated['description'] ?? null,
                 'merchantPaymentReference' => $reference,
+                'metadata' => $metadata,
+                'returnUrl' => $validated['returnUrl'] ?? null,
+                'cancelUrl' => $validated['cancelUrl'] ?? null,
             ]);
 
             $payment->update([
                 'djomy_transaction_id' => $result['transactionId'] ?? null,
-                'redirect_url'         => $result['redirectUrl'] ?? null, // KULU only
-                'djomy_response'       => $result,
-                'status'               => strtoupper($result['status'] ?? 'PENDING'),
-            ]);
-
-            $this->logInfo('[Djomy PaymentController] Booking payment initiated', [
-                'payment_id' => $payment->id,
-                'merchant_reference' => $reference,
-                'djomy_transaction_id' => $result['transactionId'] ?? null,
+                'redirect_url' => $result['redirectUrl'] ?? null,
+                'djomy_response' => $result,
                 'status' => strtoupper($result['status'] ?? 'PENDING'),
             ]);
 
+            // Check if payment is successful immediately (rare but possible)
             if ($payment->fresh()->isSuccessful()) {
                 $this->bookingPaymentService->applySuccessfulDirectPayment($payment->fresh());
             }
@@ -138,6 +127,7 @@ class PaymentController extends Controller
             $response = [
                 'reference' => $reference,
                 'booking_reference' => $booking->reference,
+                'status' => $payment->status,
                 'payment' => $result,
             ];
 
@@ -145,30 +135,18 @@ class PaymentController extends Controller
             if ($validated['paymentMethod'] === 'KULU' && isset($result['redirectUrl'])) {
                 $response['redirectUrl'] = $result['redirectUrl'];
                 $response['message'] = 'Redirigez le payeur vers l\'URL fournie pour finaliser le paiement.';
-            }
-
-            // For OM/MOMO: user gets a push notification
-            if (in_array($validated['paymentMethod'], ['OM', 'MOMO'])) {
-                $response['message'] = 'Le payeur recevra une notification par SMS ou dans l\'application pour confirmer le paiement.';
-            }
-
-            if (!isset($response['message'])) {
+            } elseif (in_array($validated['paymentMethod'], ['OM', 'MOMO'])) {
+                $response['message'] = 'Le payeur recevra une notification pour confirmer le paiement.';
+            } else {
                 $response['message'] = 'Paiement initialisé avec succès.';
             }
 
-            return $this->successResponse(
-                $response,
-                $response['message'],
-                201
-            );
+            return $this->successResponse($response, $response['message'], 201);
         } catch (\Exception $e) {
-            $this->logInfo('[Djomy PaymentController] Booking payment initiation failed', [
-                'payment_id' => $payment->id,
-                'merchant_reference' => $reference,
-                'error' => $e->getMessage(),
+            $payment->update([
+                'status' => 'FAILED',
+                'djomy_response' => ['error' => $e->getMessage()]
             ]);
-
-            $payment->update(['status' => 'FAILED', 'djomy_response' => ['error' => $e->getMessage()]]);
 
             return $this->errorResponse(
                 'Échec de l\'initialisation du paiement.',
@@ -179,7 +157,7 @@ class PaymentController extends Controller
     }
 
     /**
-     * POST /api/payments/{reference}/confirm-otp
+     * POST /api/v1/payments/{reference}/confirm-otp
      * Confirm a pending direct payment with the OTP the payer received.
      */
     public function confirmOtp(Request $request, string $reference): JsonResponse
@@ -188,7 +166,7 @@ class PaymentController extends Controller
             'oneTimePin' => ['required', 'string', 'regex:/^\d{4,6}$/'],
         ]);
 
-        $payment = DjomyPayment::query()->where('merchant_reference', $reference)->firstOrFail();
+        $payment = DjomyPayment::where('merchant_reference', $reference)->firstOrFail();
 
         if ($payment->booking && !$this->permissionService->canViewBooking($request->user(), $payment->booking)) {
             return $this->errorResponse('Paiement introuvable.', ['payment' => 'Ce paiement n\'est pas disponible.'], 404);
@@ -202,7 +180,7 @@ class PaymentController extends Controller
             $result = $this->djomy->confirmOtp($payment->djomy_transaction_id, $request->input('oneTimePin'));
 
             $payment->update([
-                'status'         => strtoupper($result['status'] ?? $payment->status),
+                'status' => strtoupper($result['status'] ?? $payment->status),
                 'djomy_response' => $result,
             ]);
 
@@ -211,7 +189,11 @@ class PaymentController extends Controller
             }
 
             return $this->successResponse(
-                ['reference' => $reference, 'status' => $payment->fresh()->status, 'payment' => $result],
+                [
+                    'reference' => $reference,
+                    'status' => $payment->fresh()->status,
+                    'payment' => $result
+                ],
                 'OTP confirmé avec succès.'
             );
         } catch (\Exception $e) {
@@ -220,19 +202,12 @@ class PaymentController extends Controller
     }
 
     /**
-     * GET /api/payments/{reference}/status
+     * GET /api/v1/payments/{reference}/status
      * Check the status of a payment by your internal merchant reference.
      */
     public function status(Request $request, string $reference): JsonResponse
     {
-        $payment = DjomyPayment::query()->with('booking')->where('merchant_reference', $reference)->firstOrFail();
-
-        $this->logInfo('[Djomy PaymentController] Fetching booking payment status', [
-            'payment_id' => $payment->id,
-            'merchant_reference' => $reference,
-            'djomy_transaction_id' => $payment->djomy_transaction_id,
-            'stored_status' => $payment->status,
-        ]);
+        $payment = DjomyPayment::with('booking')->where('merchant_reference', $reference)->firstOrFail();
 
         if ($payment->booking && !$this->permissionService->canViewBooking($request->user(), $payment->booking)) {
             return $this->errorResponse(
@@ -254,15 +229,8 @@ class PaymentController extends Controller
             $result = $this->djomy->getPayment($payment->djomy_transaction_id);
 
             $payment->update([
-                'status'         => strtoupper($result['status'] ?? $payment->status),
-                'djomy_response' => $result,
-            ]);
-
-            $this->logInfo('[Djomy PaymentController] Booking payment status refreshed', [
-                'payment_id' => $payment->id,
-                'merchant_reference' => $reference,
-                'djomy_transaction_id' => $payment->djomy_transaction_id,
                 'status' => strtoupper($result['status'] ?? $payment->status),
+                'djomy_response' => $result,
             ]);
 
             if ($payment->booking) {
@@ -279,32 +247,15 @@ class PaymentController extends Controller
                 'Statut du paiement récupéré avec succès.'
             );
         } catch (\Exception $e) {
-            $this->logInfo('[Djomy PaymentController] Booking payment status refresh failed', [
-                'payment_id' => $payment->id,
-                'merchant_reference' => $reference,
-                'djomy_transaction_id' => $payment->djomy_transaction_id,
-                'stored_status' => $payment->status,
-                'error' => $e->getMessage(),
-            ]);
-
             // Return locally stored status if Djomy is unreachable
             return $this->successResponse(
                 [
                     'reference' => $reference,
                     'status' => $payment->status,
-                    'note' => 'Impossible d\'actualiser le statut depuis Djomy : ' . $e->getMessage(),
+                    'note' => 'Impossible d\'actualiser le statut depuis Djomy'
                 ],
-                'Statut local du paiement récupéré avec succès.'
+                'Statut local du paiement récupéré.'
             );
-        }
-    }
-
-    private function logInfo(string $message, array $context = []): void
-    {
-        Log::info($message, $context);
-
-        if (config('logging.default') !== 'single') {
-            Log::channel('single')->info($message, $context);
         }
     }
 }

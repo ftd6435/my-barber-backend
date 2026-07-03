@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Client\Response;
-use Exception;
+use Illuminate\Support\Facades\Log;
 
 class DjomyService
 {
@@ -25,19 +25,15 @@ class DjomyService
 
     public function __construct()
     {
-        $this->clientId     = config('services.djomy.client_id');
+        $this->clientId = config('services.djomy.client_id');
         $this->clientSecret = config('services.djomy.client_secret');
-        $this->baseUrl      = rtrim(config('services.djomy.base_url'), '/');
+        $this->baseUrl = rtrim(config('services.djomy.base_url'), '/');
     }
-
-    // ----------------------------------------------------------------
-    // AUTHENTICATION
-    // ----------------------------------------------------------------
 
     /**
      * Generate HMAC-SHA256 signature.
      * signature = HMAC_SHA256(clientId, clientSecret)
-     * X-API-KEY  = clientId:signature
+     * X-API-KEY = clientId:signature
      */
     private function generateHmac(string $stringToSign): string
     {
@@ -56,35 +52,24 @@ class DjomyService
     public function getAccessToken(): string
     {
         return Cache::remember('djomy_access_token', 3300, function (): string {
-            $this->logInfo('[Djomy] Requesting access token', [
-                'base_url' => $this->baseUrl,
-                'client_id' => $this->maskValue($this->clientId),
-            ]);
-
             $response = Http::withHeaders([
-                'X-API-KEY'    => $this->getXApiKey(),
+                'X-API-KEY' => $this->getXApiKey(),
                 'Content-Type' => 'application/json',
-                'Accept'       => 'application/json',
-            ])->post("{$this->baseUrl}/v1/auth", [
-                'clientId'     => $this->clientId,
+                'Accept' => 'application/json',
+            ])->post("{$this->baseUrl}/auth/token", [
+                'clientId' => $this->clientId,
                 'clientSecret' => $this->clientSecret,
             ]);
 
             $payload = $this->extractResponseData($response, 'Échec de l\'authentification');
+
             $token = is_array($payload)
-                ? (
-                    $payload['access_token']
-                    ?? $payload['token']
-                    ?? $payload['accessToken']
-                    ?? null
-                )
+                ? ($payload['access_token'] ?? $payload['token'] ?? $payload['accessToken'] ?? null)
                 : $payload;
 
             if (!is_string($token) || trim($token) === '') {
                 throw new Exception('[Djomy] Échec de l\'authentification: access token introuvable dans la réponse.');
             }
-
-            $this->logInfo('[Djomy] Access token received successfully');
 
             return $token;
         });
@@ -96,62 +81,37 @@ class DjomyService
      */
     public function confirmOtp(string $transactionReference, string $oneTimePin): array
     {
-        $endpoint = '/v1/payments/' . rawurlencode($transactionReference) . '/confirmOTP';
+        $response = $this->client()->post(
+            '/v1/payments/' . rawurlencode($transactionReference) . '/confirmOTP',
+            ['oneTimePin' => $oneTimePin]
+        );
 
-        $this->logInfo('[Djomy] Confirming OTP', [
-            'endpoint' => $endpoint,
-            'transaction_reference' => $transactionReference,
-        ]);
-
-        $response = $this->client()->post($endpoint, [
-            'oneTimePin' => $oneTimePin,
-        ]);
-
-        $result = $this->extractArrayResponseData($response, 'Échec de la confirmation OTP');
-
-        $this->logInfo('[Djomy] OTP confirmed', [
-            'transaction_reference' => $transactionReference,
-            'status' => $result['status'] ?? null,
-        ]);
-
-        return $result;
+        return $this->extractArrayResponseData($response, 'Échec de la confirmation OTP');
     }
 
     /**
      * Base HTTP client with both required headers:
-     *   - Authorization: Bearer <jwt_token>
-     *   - X-API-KEY: clientId:hmac_signature
+     * - Authorization: Bearer <jwt_token>
+     * - X-API-KEY: clientId:hmac_signature
      */
-    private function client()
+    private function client(): \Illuminate\Http\Client\PendingRequest
     {
         return Http::withHeaders([
             'Authorization' => 'Bearer ' . $this->getAccessToken(),
-            'X-API-KEY'     => $this->getXApiKey(),
-            'Content-Type'  => 'application/json',
-            'Accept'        => 'application/json',
+            'X-API-KEY' => $this->getXApiKey(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
         ])->baseUrl($this->baseUrl);
     }
 
     // ----------------------------------------------------------------
-    // DIRECT PAYMENT  (no redirect)
+    // DIRECT PAYMENT (no redirect)
     // POST /v1/payments
     // ----------------------------------------------------------------
 
     /**
      * Initiate a payment directly via API (no redirect to Djomy portal).
      * ⚠️ CARD/VISA/MASTERCARD are NOT allowed here — use createPaymentLink() instead.
-     *
-     * @param array $data {
-     *   paymentMethod:          string   OM|MOMO|KULU|YMO|SOUTRA_MONEY|PAYCARD
-     *   payerIdentifier:        string   International phone: 00224623707722
-     *   amount:                 float    Positive number
-     *   countryCode:            string   ISO 2-char: GN, CI...
-     *   description?:           string   Max 255 chars
-     *   merchantPaymentReference?: string Max 255 chars (your order ref)
-     *   returnUrl?:             string   Required for KULU (https only)
-     *   cancelUrl?:             string   https only
-     *   metadata?:              array    Flat JSON only (no nested arrays/objects)
-     * }
      */
     public function initiatePayment(array $data): array
     {
@@ -162,49 +122,39 @@ class DjomyService
             );
         }
 
-        $isGn = \Illuminate\Support\Str::upper($data['countryCode'] ?? 'GN') === strtoupper('GN');
-        $number = $isGn ? '00224' . $data['payerIdentifier'] : $data['payerIdentifier'];
-
         $payload = [
-            'paymentMethod'           => $data['paymentMethod'],
-            'payerIdentifier'         => $number,
-            'amount'                  => $data['amount'],
-            'countryCode'             => $data['countryCode'] ?? 'GN',
-            'description'             => $data['description'] ?? null,
-            'merchantPaymentReference' => $data['merchantPaymentReference'] ?? null,
-            'metadata'                => $data['metadata'] ?? null,
+            'paymentMethod' => $data['paymentMethod'],
+            'payerIdentifier' => $data['payerIdentifier'],
+            'amount' => $data['amount'],
+            'countryCode' => $data['countryCode'] ?? 'GN',
         ];
+
+        // Optional fields
+        if (isset($data['description'])) {
+            $payload['description'] = $data['description'];
+        }
+        if (isset($data['merchantPaymentReference'])) {
+            $payload['merchantPaymentReference'] = $data['merchantPaymentReference'];
+        }
+        if (isset($data['metadata'])) {
+            $payload['metadata'] = $data['metadata'];
+        }
 
         // KULU returns a redirect link — returnUrl is required
         if ($data['paymentMethod'] === 'KULU') {
-            $payload['returnUrl'] = $data['returnUrl']
-                ?? throw new Exception("L'URL de retour est obligatoire pour les paiements KULU.");
-            $payload['cancelUrl'] = $data['cancelUrl'] ?? $payload['returnUrl'];
+            if (empty($data['returnUrl'])) {
+                throw new Exception("L'URL de retour est obligatoire pour les paiements KULU.");
+            }
+            $payload['returnUrl'] = $data['returnUrl'];
+            $payload['cancelUrl'] = $data['cancelUrl'] ?? $data['returnUrl'];
         }
 
         // Remove null values to keep the payload clean
         $payload = array_filter($payload, fn($v) => $v !== null);
 
-        $this->logInfo('[Djomy] Initiating direct payment', [
-            'endpoint' => '/v1/payments',
-            'payment_method' => $payload['paymentMethod'] ?? null,
-            'merchant_reference' => $payload['merchantPaymentReference'] ?? null,
-            'payer_identifier' => $this->maskValue($payload['payerIdentifier'] ?? null),
-            'country_code' => $payload['countryCode'] ?? null,
-            'amount' => $payload['amount'] ?? null,
-        ]);
-
         $response = $this->client()->post('/v1/payments', $payload);
 
-        $result = $this->extractArrayResponseData($response, 'Échec de l\'initialisation du paiement');
-
-        $this->logInfo('[Djomy] Direct payment initiated', [
-            'merchant_reference' => $payload['merchantPaymentReference'] ?? null,
-            'transaction_id' => $result['transactionId'] ?? null,
-            'status' => $result['status'] ?? null,
-        ]);
-
-        return $result;
+        return $this->extractArrayResponseData($response, 'Échec de l\'initialisation du paiement');
     }
 
     /**
@@ -212,24 +162,8 @@ class DjomyService
      */
     public function getPayment(string $transactionReference): array
     {
-        $endpoint = '/v1/payments/' . rawurlencode($transactionReference) . '/status';
-
-        $this->logInfo('[Djomy] Fetching direct payment status', [
-            'endpoint' => $endpoint,
-            'transaction_reference' => $transactionReference,
-        ]);
-
-        $response = $this->client()->get($endpoint);
-
-        $result = $this->extractArrayResponseData($response, 'Échec de la récupération du statut du paiement');
-
-        $this->logInfo('[Djomy] Direct payment status fetched', [
-            'transaction_reference' => $transactionReference,
-            'status' => $result['status'] ?? null,
-            'merchant_reference' => $result['merchantPaymentReference'] ?? $result['merchantReference'] ?? null,
-        ]);
-
-        return $result;
+        $response = $this->client()->get('/v1/payments/' . rawurlencode($transactionReference) . '/status');
+        return $this->extractArrayResponseData($response, 'Échec de la récupération du statut du paiement');
     }
 
     // ----------------------------------------------------------------
@@ -240,69 +174,49 @@ class DjomyService
      * Create a payment link (hosted Djomy portal).
      * Supports all payment methods including CARD/VISA/MASTERCARD.
      * POST /v1/links
-     *
-     * @param array $data {
-     *   countryCode:            string   Required. ISO 2-char: GN, CI...
-     *   amountToPay?:           float    Pre-fill amount on the payment page
-     *   linkName?:              string   Label in merchant dashboard
-     *   phoneNumber?:           string   Required if sendSms=true
-     *   sendSms?:               bool     Have Djomy send the link by SMS (default: false)
-     *   description?:           string
-     *   usageType?:             string   UNIQUE|MULTIPLE (default: UNIQUE)
-     *   usageLimit?:            int      Only for MULTIPLE usage
-     *   expiresAt?:             string   ISO 8601 datetime
-     *   merchantReference?:     string
-     *   returnUrl?:             string   https only — ?transactionId=...&status=SUCCESS appended
-     *   cancelUrl?:             string   https only
-     *   allowedPaymentMethods?: string[] OM|MOMO|SOUTRA_MONEY|PAYCARD|CARD
-     *   customFields?:          array    [{label, placeholder, required}]
-     *   metadata?:              array    Flat JSON only
-     * }
      */
     public function createPaymentLink(array $data): array
     {
-        $payload = array_filter([
-            'countryCode'            => $data['countryCode'] ?? 'GN',
-            'amountToPay'            => $data['amountToPay'] ?? null,
-            'linkName'               => $data['linkName'] ?? null,
-            'phoneNumber'            => $data['phoneNumber'] ?? null,
-            'sendSms'                => $data['sendSms'] ?? false,
-            'description'            => $data['description'] ?? null,
-            'usageType'              => $data['usageType'] ?? 'UNIQUE',
-            'usageLimit'             => $data['usageLimit'] ?? null,
-            'expiresAt'              => $data['expiresAt'] ?? null,
-            'merchantReference'      => $data['merchantReference'] ?? null,
-            'returnUrl'              => $data['returnUrl'] ?? null,
-            'cancelUrl'              => $data['cancelUrl'] ?? null,
-            'allowedPaymentMethods'  => $data['allowedPaymentMethods'] ?? null,
-            'customFields'           => $data['customFields'] ?? null,
-            'metadata'               => $data['metadata'] ?? null,
-        ], fn($v) => $v !== null && $v !== false);
+        $payload = [
+            'countryCode' => $data['countryCode'] ?? 'GN',
+            'usageType' => $data['usageType'] ?? 'UNIQUE',
+            'sendSms' => $data['sendSms'] ?? false,
+        ];
 
-        // Preserve explicit false for sendSms
-        $payload['sendSms'] = $data['sendSms'] ?? false;
+        // Add optional fields
+        $optionalFields = [
+            'amountToPay',
+            'linkName',
+            'phoneNumber',
+            'description',
+            'usageLimit',
+            'expiresAt',
+            'merchantReference',
+            'returnUrl',
+            'cancelUrl',
+            'allowedPaymentMethods',
+            'customFields',
+            'metadata'
+        ];
 
-        $this->logInfo('[Djomy] Creating payment link', [
-            'endpoint' => '/v1/links',
-            'merchant_reference' => $payload['merchantReference'] ?? null,
-            'country_code' => $payload['countryCode'] ?? null,
-            'amount_to_pay' => $payload['amountToPay'] ?? null,
-            'allowed_payment_methods' => $payload['allowedPaymentMethods'] ?? null,
-            'send_sms' => $payload['sendSms'],
-            'phone_number' => $this->maskValue($payload['phoneNumber'] ?? null),
-        ]);
+        foreach ($optionalFields as $field) {
+            if (isset($data[$field])) {
+                $payload[$field] = $data[$field];
+            }
+        }
+
+        // Validate sendSms requires phoneNumber
+        if (!empty($payload['sendSms']) && empty($payload['phoneNumber'])) {
+            throw new Exception('Le numéro de téléphone est obligatoire lorsque l\'envoi par SMS est activé.');
+        }
+
+        // Validate MULTIPLE usage requires usageLimit
+        if ($payload['usageType'] === 'MULTIPLE' && empty($payload['usageLimit'])) {
+            throw new Exception('La limite d\'utilisation est obligatoire lorsque le type d\'utilisation est MULTIPLE.');
+        }
 
         $response = $this->client()->post('/v1/links', $payload);
-
-        $result = $this->extractArrayResponseData($response, 'Échec de la création du lien de paiement');
-
-        $this->logInfo('[Djomy] Payment link created', [
-            'merchant_reference' => $payload['merchantReference'] ?? null,
-            'reference' => $result['reference'] ?? $result['paymentLinkReference'] ?? null,
-            'status' => $result['status'] ?? null,
-        ]);
-
-        return $result;
+        return $this->extractArrayResponseData($response, 'Échec de la création du lien de paiement');
     }
 
     /**
@@ -311,59 +225,33 @@ class DjomyService
      */
     public function getPaymentLink(string $reference): array
     {
-        $endpoint = '/v1/links/' . rawurlencode($reference);
-
-        $this->logInfo('[Djomy] Fetching payment link', [
-            'endpoint' => $endpoint,
-            'reference' => $reference,
-        ]);
-
-        $response = $this->client()->get($endpoint);
-
-        $result = $this->extractArrayResponseData($response, 'Échec de la récupération du lien de paiement');
-
-        $this->logInfo('[Djomy] Payment link fetched', [
-            'reference' => $reference,
-            'status' => $result['status'] ?? null,
-        ]);
-
-        return $result;
+        $response = $this->client()->get('/v1/links/' . rawurlencode($reference));
+        return $this->extractArrayResponseData($response, 'Échec de la récupération du lien de paiement');
     }
 
     /**
      * List all payment links (paginated).
      * GET /v1/links
-     *
-     * @param array $params {
-     *   page?:      int
-     *   size?:      int
-     *   startDate?: string  2024-01-01T00:00:00
-     *   endDate?:   string  2024-12-31T23:59:59
-     * }
      */
     public function listPaymentLinks(array $params = []): array
     {
-        $query = array_filter([
-            'paginationRequest' => [
-                'page' => $params['page'] ?? 0,
-                'size' => $params['size'] ?? 20,
-            ],
-            'startDate' => $params['startDate'] ?? null,
-            'endDate'   => $params['endDate'] ?? null,
-        ], fn($v) => $v !== null);
+        $query = [];
 
-        $this->logInfo('[Djomy] Listing payment links', [
-            'endpoint' => '/v1/links',
-            'query' => $query,
-        ]);
+        if (isset($params['page'])) {
+            $query['page'] = $params['page'];
+        }
+        if (isset($params['size'])) {
+            $query['size'] = $params['size'];
+        }
+        if (isset($params['startDate'])) {
+            $query['startDate'] = $params['startDate'];
+        }
+        if (isset($params['endDate'])) {
+            $query['endDate'] = $params['endDate'];
+        }
 
         $response = $this->client()->get('/v1/links', $query);
-
-        $result = $this->extractArrayResponseData($response, 'Échec de la récupération des liens de paiement');
-
-        $this->logInfo('[Djomy] Payment links listed successfully');
-
-        return $result;
+        return $this->extractArrayResponseData($response, 'Échec de la récupération des liens de paiement');
     }
 
     // ----------------------------------------------------------------
@@ -378,12 +266,6 @@ class DjomyService
                 ? ($body['message'] ?? $body['error'] ?? json_encode($body))
                 : $body;
 
-            $this->logInfo('[Djomy] Request failed', [
-                'context' => $context,
-                'http_status' => $response->status(),
-                'response_body' => is_string($body) ? $body : json_encode($body),
-            ]);
-
             throw new Exception("[Djomy] {$context}: {$message} (HTTP {$response->status()})");
         }
 
@@ -392,12 +274,6 @@ class DjomyService
         if (is_array($body) && array_key_exists('success', $body) && $body['success'] === false) {
             $message = $body['message'] ?? $body['error'] ?? $body['errors'] ?? json_encode($body);
             $message = is_array($message) ? json_encode($message) : (string) $message;
-
-            $this->logInfo('[Djomy] Request returned unsuccessful payload', [
-                'context' => $context,
-                'http_status' => $response->status(),
-                'response_body' => json_encode($body),
-            ]);
 
             throw new Exception("[Djomy] {$context}: {$message} (HTTP {$response->status()})");
         }
@@ -413,7 +289,7 @@ class DjomyService
             throw new Exception("[Djomy] {$context}: réponse JSON invalide.");
         }
 
-        return array_key_exists('data', $body) ? $body['data'] : $body;
+        return $body['data'] ?? $body;
     }
 
     private function extractArrayResponseData(Response $response, string $context): array
@@ -421,34 +297,9 @@ class DjomyService
         $data = $this->extractResponseData($response, $context);
 
         if (!is_array($data)) {
-            throw new Exception("[Djomy] {$context}: la clé data ne contient pas un objet exploitable.");
+            throw new Exception("[Djomy] {$context}: la réponse ne contient pas un objet exploitable.");
         }
 
         return $data;
-    }
-
-    private function maskValue(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        $string = (string) $value;
-        $length = strlen($string);
-
-        if ($length <= 4) {
-            return str_repeat('*', $length);
-        }
-
-        return substr($string, 0, 2) . str_repeat('*', max(0, $length - 4)) . substr($string, -2);
-    }
-
-    private function logInfo(string $message, array $context = []): void
-    {
-        Log::info($message, $context);
-
-        if (config('logging.default') !== 'single') {
-            Log::channel('single')->info($message, $context);
-        }
     }
 }

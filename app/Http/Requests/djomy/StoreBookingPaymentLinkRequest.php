@@ -39,11 +39,10 @@ class StoreBookingPaymentLinkRequest extends FormRequest
             'allowedPaymentMethods' => ['nullable', 'array'],
             'allowedPaymentMethods.*' => ['string', Rule::in(['OM', 'MOMO', 'SOUTRA_MONEY', 'PAYCARD', 'CARD'])],
             'customFields' => ['nullable', 'array'],
-            'customFields.*.label' => ['required', 'string'],
+            'customFields.*.label' => ['required_with:customFields', 'string'],
             'customFields.*.placeholder' => ['nullable', 'string'],
             'customFields.*.required' => ['nullable', 'boolean'],
             'metadata' => ['nullable', 'array'],
-            // 'metadata.*' => ['scalar'],
         ];
     }
 

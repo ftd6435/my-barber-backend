@@ -53,4 +53,29 @@ class DjomyPayment extends Model
     {
         return $this->belongsTo(Currency::class);
     }
+
+    public function isFailed(): bool
+    {
+        return strtoupper($this->status) === 'FAILED';
+    }
+
+    public function scopeByMerchantReference($query, string $reference)
+    {
+        return $query->where('merchant_reference', $reference);
+    }
+
+    public function scopeByTransactionId($query, string $transactionId)
+    {
+        return $query->where('djomy_transaction_id', $transactionId);
+    }
+
+    public function scopePending($query)
+    {
+        return $query->where('status', 'PENDING');
+    }
+
+    public function scopeSuccessful($query)
+    {
+        return $query->where('status', 'SUCCESS');
+    }
 }
