@@ -56,7 +56,7 @@ class DjomyService
                 'X-API-KEY' => $this->getXApiKey(),
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-            ])->post("{$this->baseUrl}/auth/token", [
+            ])->post("{$this->baseUrl}/v1/auth", [
                 'clientId' => $this->clientId,
                 'clientSecret' => $this->clientSecret,
             ]);

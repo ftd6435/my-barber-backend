@@ -44,19 +44,19 @@ It is based on the current implementation in:
 
 ### Direct Payments
 
-- `POST /api/payments/initiate`
-- `GET /api/payments/{reference}/status`
-- `POST /api/payments/{reference}/confirm-otp`
+- `POST /api/v1/payments/initiate`
+- `GET /api/v1/payments/{reference}/status`
+- `POST /api/v1/payments/{reference}/confirm-otp`
 
 ### Payment Links
 
-- `POST /api/payment-links`
-- `GET /api/payment-links/{reference}`
-- `GET /api/payment-links`
+- `POST /api/v1/payment-links`
+- `GET /api/v1/payment-links/{reference}`
+- `GET /api/v1/payment-links`
 
 ### Webhook
 
-- `POST /api/webhooks/djomy`
+- `POST /api/v1/webhooks/djomy`
 
 ## Payment Methods
 
@@ -103,7 +103,7 @@ It is based on the current implementation in:
 
 ### Endpoint
 
-- `POST /api/payments/initiate`
+- `POST /api/v1/payments/initiate`
 
 ### Purpose
 
@@ -356,14 +356,14 @@ This is the real current shape returned by the implementation.
 - Save `data.payment.transactionId` if you need it in the UI state
 - If `data.redirectUrl` exists, redirect the user
 - Otherwise show a pending state
-- Then poll `GET /api/payments/{reference}/status`
-- If the payment method requires OTP in your flow, show an OTP screen and call `POST /api/payments/{reference}/confirm-otp`
+- Then poll `GET /api/v1/payments/{reference}/status`
+- If the payment method requires OTP in your flow, show an OTP screen and call `POST /api/v1/payments/{reference}/confirm-otp`
 
 ## 2. Direct Payment Status
 
 ### Endpoint
 
-- `GET /api/payments/{reference}/status`
+- `GET /api/v1/payments/{reference}/status`
 
 ### Purpose
 
@@ -371,12 +371,12 @@ This is the real current shape returned by the implementation.
 
 ### Path param
 
-- `reference`: the merchant reference returned by `POST /api/payments/initiate`
+- `reference`: the merchant reference returned by `POST /api/v1/payments/initiate`
 
 ### Example request
 
 ```http
-GET /api/payments/BK-2026004-PAY-DAZE/status
+GET /api/v1/payments/BK-2026004-PAY-DAZE/status
 Authorization: Bearer <token>
 ```
 
@@ -488,7 +488,7 @@ This happens when the backend cannot refresh the remote Djomy status but still h
 
 ### Endpoint
 
-- `POST /api/payments/{reference}/confirm-otp`
+- `POST /api/v1/payments/{reference}/confirm-otp`
 
 ### Purpose
 
@@ -565,7 +565,7 @@ This happens when the backend cannot refresh the remote Djomy status but still h
 
 ### Endpoint
 
-- `POST /api/payment-links`
+- `POST /api/v1/payment-links`
 
 ### Purpose
 
@@ -808,14 +808,14 @@ This happens when the backend cannot refresh the remote Djomy status but still h
 
 - Open `data.paymentUrl`
 - Save `data.reference`
-- Poll `GET /api/payment-links/{reference}`
+- Poll `GET /api/v1/payment-links/{reference}`
 - If the link becomes successful, refetch the booking
 
 ## 5. Get Payment Link Status
 
 ### Endpoint
 
-- `GET /api/payment-links/{reference}`
+- `GET /api/v1/payment-links/{reference}`
 
 ### Purpose
 
@@ -828,7 +828,7 @@ This happens when the backend cannot refresh the remote Djomy status but still h
 ### Example request
 
 ```http
-GET /api/payment-links/DJL-123456
+GET /api/v1/payment-links/DJL-123456
 Authorization: Bearer <token>
 ```
 
@@ -890,7 +890,7 @@ Authorization: Bearer <token>
 
 ### Endpoint
 
-- `GET /api/payment-links`
+- `GET /api/v1/payment-links`
 
 ### Purpose
 
@@ -906,7 +906,7 @@ Authorization: Bearer <token>
 ### Example request
 
 ```http
-GET /api/payment-links?page=0&size=20&startDate=2026-07-01T00:00:00&endDate=2026-07-31T23:59:59
+GET /api/v1/payment-links?page=0&size=20&startDate=2026-07-01T00:00:00&endDate=2026-07-31T23:59:59
 Authorization: Bearer <admin_token>
 ```
 
@@ -947,7 +947,7 @@ Authorization: Bearer <admin_token>
 
 ### Endpoint
 
-- `POST /api/webhooks/djomy`
+- `POST /api/v1/webhooks/djomy`
 
 ### Purpose
 
@@ -958,7 +958,10 @@ Authorization: Bearer <admin_token>
 ### Signature
 
 - Required header:
-    - `X-API-KEY: clientId:hmac`
+    - `X-Webhook-Signature: v1:<signature>`
+- The signature is `HMAC_SHA256(rawRequestBody, clientSecret)` in hex.
+- The backend rejects the webhook with `401` if the signature does not match.
+- The frontend never generates or verifies this — it is handled server-side.
 
 ### Success response example
 
@@ -984,24 +987,62 @@ Authorization: Bearer <admin_token>
 }
 ```
 
-### Payment webhook payload example
+### Event types
+
+Djomy sends `payment.*` events (there is no separate `link.*` event; link
+payments arrive as `payment.*` with a top-level `paymentLinkReference`):
+
+- `payment.created`
+- `payment.redirected`
+- `payment.pending`
+- `payment.cancelled`
+- `payment.success`
+- `payment.failed`
+
+### Payment webhook payload example (direct payment)
+
+The transaction details are nested under `data`:
 
 ```json
 {
-    "eventType": "payment.updated",
-    "status": "SUCCESS",
-    "transactionId": "626b98ee-cd58-4762-863e-e005947bd308",
-    "merchantPaymentReference": "BK-2026004-PAY-DAZE"
+    "message": "Statut du paiement",
+    "eventType": "payment.success",
+    "eventId": "8bfd5709-737c-4254-99a7-57a3d630b349",
+    "data": {
+        "transactionId": "626b98ee-cd58-4762-863e-e005947bd308",
+        "status": "SUCCESS",
+        "paidAmount": 2000,
+        "receivedAmount": 1974,
+        "fees": 26,
+        "paymentMethod": "OM",
+        "merchantPaymentReference": "BK-2026004-PAY-DAZE",
+        "payerIdentifier": "00224622146714",
+        "currency": "GNF",
+        "createdAt": "2026-07-13T10:30:00.000Z"
+    },
+    "timestamp": "2026-07-13T10:31:00.000Z"
 }
 ```
 
 ### Payment link webhook payload example
 
+A payment made through a payment link carries the top-level `paymentLinkReference`:
+
 ```json
 {
-    "eventType": "link.updated",
-    "reference": "DJL-123456",
-    "status": "SUCCESS"
+    "message": "Statut du paiement",
+    "eventType": "payment.success",
+    "eventId": "8bfd5709-737c-4254-99a7-57a3d630b349",
+    "data": {
+        "transactionId": "4be3f1d2-1234-5678-aaaa-bbbbbbbbbbbb",
+        "status": "SUCCESS",
+        "paidAmount": 2000,
+        "paymentMethod": "CARD",
+        "merchantPaymentReference": "BK-2026004-LINK-AB12CD34",
+        "currency": "GNF"
+    },
+    "paymentLinkReference": "DJL-123456",
+    "timestamp": "2026-07-13T10:31:00.000Z"
 }
 ```
 
@@ -1035,21 +1076,21 @@ Authorization: Bearer <admin_token>
 
 ### Direct payment flow
 
-1. Call `POST /api/payments/initiate`
+1. Call `POST /api/v1/payments/initiate`
 2. Save `reference`
 3. If `redirectUrl` exists, redirect the user
 4. If the flow needs OTP, show OTP input UI
-5. Call `POST /api/payments/{reference}/confirm-otp` when needed
-6. Poll `GET /api/payments/{reference}/status`
+5. Call `POST /api/v1/payments/{reference}/confirm-otp` when needed
+6. Poll `GET /api/v1/payments/{reference}/status`
 7. If `SUCCESS`, refetch booking
 8. If `FAILED`, show retry UI
 
 ### Payment link flow
 
-1. Call `POST /api/payment-links`
+1. Call `POST /api/v1/payment-links`
 2. Open `paymentUrl`
 3. Save `reference`
-4. Poll `GET /api/payment-links/{reference}`
+4. Poll `GET /api/v1/payment-links/{reference}`
 5. If `SUCCESS`, refetch booking
 
 ## 10. Suggested Frontend Types
@@ -1130,7 +1171,7 @@ type PaymentLinkCreateResponse = {
 
 ## 11. Final Frontend Notes
 
-- Use `/api/payments/...` and `/api/payment-links/...` exactly as implemented now.
+- Use `/api/v1/payments/...` and `/api/v1/payment-links/...` exactly as implemented now.
 - Do not send extra quotes, backticks, or spaces inside URL strings.
 - For direct payment, always keep the merchant `reference` returned by your backend.
 - For OTP flows, submit the OTP to your backend, not directly to Djomy.
